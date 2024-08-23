@@ -1,3 +1,32 @@
+# Blowin in the Wind: Server
+
+## Installation
+
+```
+  npm install
+```
+
+Check that _react-scripts_ is executable:
+
+```
+  ls -l ./node_modules/.bin/react-scripts
+
+  # If needed
+  chmod a+x ./node_modules/.bin/react-scripts
+````
+
+## Note on Use of Socket.IO
+
+
+This project makes use of _Socket.IO_.  After _npm install_, there needs to be
+a copy of of this library in the public folder.  This can be accomplished with:
+```
+  cp -r node_modules/socket.io-client/dist public/socket.io
+```
+
+Boilerplate README details from creating a React App follow ...
+
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
