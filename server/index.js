@@ -8,6 +8,9 @@ const {Server} = require("socket.io");
 const path = require("path"); // Import the path module
 var serveindex = require('serve-index')
 
+const SERVER_PORT = process.env.BITW_SERVER_PORT || 3001;
+const CLIENT_URL  = process.env.BITW_CLIENT_URL || "http://localhost:3001";
+
 app.use(cors());
 
 // Middleware to set the correct MIME type for CSS files
@@ -24,16 +27,23 @@ app.use(express.static(path.join(__dirname, '../client/build')));
 var chat = __dirname + '/src';
 app.use('/src', serveindex(chat));
 
-//generate a server 
+//generate a server
+
+cors_origin = CLIENT_URL
+
 const server =  http.createServer(app);
 const io = new Server(server, {
     cors: {
         //might change when we have our own dowmain 
-        origin: "http://localhost:3000",
+        //origin: "http://localhost:3000",
+        origin: cors_origin,
         methods: ["GET", "POST"],
     },
 } );
 
+console.log(`Granting CORS Allow-Origin:`)
+console.log(`  ${cors_origin} => [POST,GET]`)
+	    
 // initialise cities array
 let citiesArray = [
     { city: "Auckland", coordinates: [174.763336, -36.848461, 300.0]},
@@ -230,6 +240,6 @@ io.on("connection", (socket) => {
     }
 });
 
-server.listen(3001, ()=> {
-    console.log("Socket.IO server running on port 3001");
+server.listen(SERVER_PORT, ()=> {
+    console.log(`Web + Socket.IO server running on port ${SERVER_PORT}`);
 });
