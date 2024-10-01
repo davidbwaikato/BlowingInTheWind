@@ -8,6 +8,7 @@ import { fetchWeatherData } from "./weather.js";
 // Set access token
 Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 
+const SERVER_URL  = config.SERVER_URL
 
 /*********************************
  * SETUP
@@ -512,6 +513,9 @@ async function createPathEntity(){
 
   //console.log("LOG: Entity created at", new Date().toISOString());
 
+  console.log("**** creatPathEntity(): currentCityIndex = " + currentCityIndex)
+  console.log(randomPointsArray)
+    
   await animatePath(pathEntity);
   //console.log("LOG: Path animation completed at", new Date().toISOString());
 }
@@ -526,8 +530,9 @@ function generateAnimatedPath(){
 }
 //first path entity - called only once
 //NOTE: if clock is started as soon as program is loaded this entity gets removed
-//  wait a few seconds for game to load or increase the setTimeout time 
-setTimeout(createPathEntity, 4000);
+//  wait a few seconds for game to load or increase the setTimeout time
+console.warn("Warning: **** Supressing setTimeout(createPathEntity,4000)")
+//setTimeout(createPathEntity, 4000);
 
 // Set up the onTick event listener
 viewer.clock.onTick.addEventListener(function(clock) {
@@ -669,14 +674,17 @@ Cesium.knockout.getObservable(viewer.animation.viewModel.clockViewModel,
   }
 });
 
-const socket = io("http://localhost:3001");
+const ws_socket_url = `${SERVER_URL}`
+console.log(`Creating connection to Web-Socket server: ${ws_socket_url}`)
+
+const socket = io(ws_socket_url);
 
 window.joinRoom = function(room){
   socket.emit("join_room", room);
 }
 
 socket.on("city_data", (data) => {
-  //console.log("Current city:", data)
+  console.log("socket.on('city_data') data:", data)
   // ********** We need to convert data.coordinates into something cesium can understand **************
   var newCoords = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]);
   let temp = { cityName: data.city, coordinates: newCoords };

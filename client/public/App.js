@@ -3,7 +3,12 @@ import './App.css';
 import io from 'socket.io-client';
 import BitwChat from './BitwChat';
 
-const socket = io.connect("http://localhost:3001");
+import config from "./config.js";
+
+const SERVER_URL = config.SERVER_URL || "http://localhost:3001";
+
+const socket = io(SERVER_URL);
+
 
 function App() {
   //initialises user and room state 
