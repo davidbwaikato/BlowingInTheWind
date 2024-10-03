@@ -36,6 +36,12 @@ such as Apache2
   emacs SETUP.bash
 ```
 
-Now follow the instructions in the README.md files in _server_ and _client_.
+Now:
+```
+  soure ./SETUP.bash
+```
+
+and follow the instructions in the README.md files first in _server_
+and then in _client_.
 
 
