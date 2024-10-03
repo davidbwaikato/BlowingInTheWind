@@ -1,0 +1,7 @@
+const config = {
+    CESIUM_API_KEY: "@CESIUM_API_KEY@",
+    WEATHER_API_KEY: "@WEATHER_API_KEY@",
+    SERVER_URL: "@BITW_SERVER_URL@"
+}
+
+export default config
