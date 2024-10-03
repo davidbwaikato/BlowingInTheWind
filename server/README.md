@@ -17,6 +17,14 @@ Then check the execution permission on _nodemon_:
 ```
 
 To start the server:
+```
+  ./BITW-START-SERVER.sh
+```
+
+## Additional Notes
+
+Bare-metal, the way to start the server is:
+
 
 ```
   npm run start
