@@ -1,7 +1,8 @@
 ```
   # Optionally:
   npm update npm
-  
+
+  # Then
   npm install
 ```
 
