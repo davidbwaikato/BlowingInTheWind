@@ -1,9 +1,11 @@
+
 .container-main {
     display: block;
     position: relative;
     width: 100%;
     height: 100%;
-    max-height: 900px;
+    /*´max-height: 900px; */
+    max-height: 100vh; 
     font-size: 0;
 }
 
@@ -75,10 +77,17 @@
     position: absolute;
     top: 0;
     left: 0;
+    /*padding-top: 10px;
+    padding-bottom: 10px;
+    margin-left: 10px; */
+    z-index: 1;
+}
+
+.pagination-inner {
+    position: relative;
     padding-top: 10px;
     padding-bottom: 10px;
     margin-left: 10px;
-    z-index: 1;
 }
 
 .pagination > #next-city {
@@ -90,7 +99,8 @@
 
 #cesiumContainer {
     display: block;
-    position: relative;
+    /*position: relative; */
+    position: absolute;
     width: 100%;
     height: 100%;
 }
@@ -127,9 +137,9 @@
 #balloonContainer {
     display: block;
     position: absolute;
-    top: 40%;
+    /*top: 40%; */
     left: 0;
-    transform: translateY(-35%);
+    /*transform: translateY(-35%); */
     width: 100%;
     height: 100%;
     line-height: 1;
@@ -199,7 +209,8 @@ html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    background-color: #81b1e5;
+    /* background-color: #81b1e5; */
+    background-color: #000000;
 }
 
 .container span{
@@ -402,18 +413,29 @@ img {
 
 #title {
     position: absolute;
-    top: 10%; /* Adjust vertical positioning if needed */
+    /*top: 10%;*/ /* Adjust vertical positioning if needed */
+    top: 5em;
     left: 50%;
     letter-spacing: 5px;
     transform: translate(-50%, -50%);
     font-family: Titan, Modak, Sniglet;
     text-align: center;
-    color: #e46516;
+    /*color: #e46516; */
+    color: #ce1413; /* #be0403 when background */
     z-index: 1;
     width: 80%; /* Adjust the width as needed */
     max-width: 600px; /* Optional: Set a maximum width to prevent it from becoming too wide on larger screens */
     margin: 0 auto; /* Center the title horizontally */
-    text-shadow: -3px 0 rgb(125, 55, 1), 0 3px rgb(125, 55, 1), 3px 0 rgb(125, 55, 1), 0 -3px rgb(125, 55, 1);
+    /* text-shadow: -5px 0 rgb(125, 55, 1), 0 3px rgb(125, 55, 1), 3px 0 rgb(125, 55, 1), 0 -3px rgb(125, 55, 1); */    
+    /* text-shadow: -5px 0 rgb(80, 25, 1), 0 3px rgb(80, 25, 1), 3px 0 rgb(80, 25, 1), 0 -3px rgb(80, 25, 1); */
+    /* 
+       https://designshack.net/articles/css/12-fun-css-text-shadows-you-can-copy-and-paste/
+         Down and Distant 
+   */
+    text-shadow: 0px 3px 0px rgb(80,25,1),
+             0px 14px 10px rgba(0,0,0,0.15),
+             0px 24px 2px rgba(0,0,0,0.1),
+             0px 34px 30px rgba(0,0,0,0.1);
 
 }
 #title h1, h3{
@@ -426,6 +448,13 @@ img {
     margin-bottom:0;
 }
 
+#stars-background {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
 .button-container {
     position: absolute;
     top: 94%;
@@ -438,18 +467,21 @@ img {
     display: inline-block;
     padding: 30px; /* Adjust button size as needed */
     font-size: 30px; /* Adjust button font size as needed */
-    font-family: Sniglet, Modak, Titan;
-    background-color: #e46516;
+    /* font-family: Sniglet, Modak, Titan; */
+    font-family: Titan, Modak, Sniglet;
+    /* background-color: #e46516; */
+    background-color: #be0403;
     color: white; /* Set button text color */
     text-decoration: none; /* Remove default link underline */
     border: none; /* Remove button border */
     border-radius: 7px; /* Apply button border radius */
     width: auto; /* Set button width */
     height: auto; /* Set button height */
-    text-shadow: -3px 0 rgb(125, 55, 1), 0 3px rgb(125, 55, 1), 3px 0 rgb(125, 55, 1), 0 -3px rgb(125, 55, 1);
+    /* text-shadow: -3px 0 rgb(125, 55, 1), 0 3px rgb(125, 55, 1), 3px 0 rgb(125, 55, 1), 0 -3px rgb(125, 55, 1); */
 
 }
 
 .button:hover {
-    background-color: #b14d0e; /* Change button background color on hover */
+    /*background-color: #b14d0e; */ /* Change button background color on hover */
+    background-color: #de2423
 }

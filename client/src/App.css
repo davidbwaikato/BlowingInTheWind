@@ -85,13 +85,15 @@ body {
   border-radius: 45px;
   padding: 5px;
   font-size: 16px;
-  background: #43a047;
+  /* background: #43a047; */
+  background: #be0403;
   color: #fff;
   cursor: pointer;
 }
 
 .joinChatContainer button:hover {
-  background: #2e7d32;
+  /*background: #2e7d32; */
+  background: #de2423;
 }
 
 .chat-window {
@@ -105,8 +107,10 @@ body {
 
 .chat-window .chat-header {
   height: 45px;
-  background: #54aef6;
-  text-shadow: -2px 0 rgb(125, 55, 1), 0 2px rgb(125, 55, 1), 2px 0 rgb(125, 55, 1), 0 -2px rgb(125, 55, 1);
+  /* background: #54aef6; */
+  background: #be0403;
+  /* text-shadow: -2px 0 rgb(125, 55, 1), 0 2px rgb(125, 55, 1), 2px 0 rgb(125, 55, 1), 0 -2px rgb(125, 55, 1); */
+  text-shadow: -2px 0 rgb(80, 25, 1), 0 2px rgb(80, 25, 1), 2px 0 rgb(80, 25, 1), 0 -2px rgb(80, 25, 1);
   background-image: url('balloon.svg');
   background-repeat: no-repeat;
   background-position: right;
@@ -118,7 +122,7 @@ body {
   display: block;
   padding: 0 1em 0 2em;
   color: #fff;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 45px;
 }
@@ -158,7 +162,8 @@ body {
   height: auto;
   min-height: 40px;
   max-width: 120px;
-  background-color: #43a047;
+  /* background-color: #43a047; */ /* **** */
+  background-color: #ffa047; /* **** */  
   border-radius: 25px;
   color: white;
   display: flex;
@@ -182,7 +187,8 @@ body {
   margin: 0 5px;
   padding: 5px 10px;
   color: rgba(21, 59, 85, 0.932);
-  background-color: lightblue;
+  /* background-color: lightblue; */
+  background-color: #ffe0a7;
   border: 1px solid transparent;
   border-radius: 15px;
 
@@ -194,7 +200,8 @@ body {
 
 #other .message-content {
   justify-content: flex-end;
-  background-color: #54aef6;
+  /*background-color: #54aef6; */
+  background-color: #f6ae54;
 }
 
 #other .message-meta {
@@ -202,7 +209,8 @@ body {
   margin: 0 5px;
   padding: 5px 0;
   color: rgba(21, 59, 85, 0.932);
-  background-color: lightblue;
+  /* background-color: lightblue; */
+  background-color: #ffe0a7;
   border: 1px solid transparent;
   border-radius: 15px;
 }
@@ -241,11 +249,13 @@ body {
   display: grid;
   width: 43px;
   height: 43px;
-  border: 1px solid #54aef6;
+  /* border: 1px solid #54aef6; */
+  border: 1px solid #de2423;
   border-radius: 50px;
   padding: 5px;
   margin: 0 15px;
-  background: #54aef6;
+  /* background: #54aef6; */
+  background: #be0403;
   place-items: center;
   cursor: pointer;
   outline: none;
@@ -254,7 +264,8 @@ body {
 }
 
 .chat-window .chat-footer button:hover {
-  color: #43a047;
+  /* color: #43a047; */
+  color: #000000;
 }
 
 .hide {
@@ -274,10 +285,15 @@ body {
   width: 100%;
   text-align: center;
   font-family: 'Roboto', sans-serif;
-  font-size: 30px;
-  text-shadow: -2px 0 rgb(125, 55, 1), 0 2px rgb(125, 55, 1), 2px 0 rgb(125, 55, 1), 0 -2px rgb(125, 55, 1);
+  /* font-size: 30px; */
+  font-size: 15px;
+  /* text-shadow: -2px 0 rgb(125, 55, 1), 0 2px rgb(125, 55, 1), 2px 0 rgb(125, 55, 1), 0 -2px rgb(125, 55, 1); */
+  text-shadow: -2px 0 rgb(80, 25, 1), 0 2px rgb(80, 25, 1), 2px 0 rgb(80, 25, 1), 0 -2px rgb(80, 25, 1);
   color: #ffffff;
-  background-color: #263238;
+  /* background-color: #263238; */
+  /* background-color: #f6ae54; */
+  /*background-color: #383226;  */ /* previous color, but weighted on red */
+  background-color: #be0403;
   margin: 0;
   padding: 10px 0px;
 }
@@ -303,10 +319,12 @@ body {
 
 .leaderboard > .player-score-div:nth-child(odd) {
   color: #ffffff;
-  background-color: #607d8b;
+  /* background-color: #607d8b; */
+  background-color: #ffe0a7;
 }
 
 .leaderboard > .player-score-div:nth-child(even) {
   color: #000000;
-  background-color: #a9dbf5;
+  /* background-color: #a9dbf5; */
+  background-color: #fff0c7;  
 }

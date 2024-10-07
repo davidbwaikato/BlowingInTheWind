@@ -14,11 +14,18 @@ const SERVER_URL  = config.SERVER_URL
  * SETUP
  *********************************/
 // Initialise viewer
-const viewer = new Cesium.Viewer("cesiumContainer", {
-  terrain: Cesium.Terrain.fromWorldTerrain(),
-  infoBox: false,
-  selectionIndicator: false,
-});
+let viewer = null;
+try {
+    viewer = new Cesium.Viewer("cesiumContainer", {
+	terrain: Cesium.Terrain.fromWorldTerrain(),
+	infoBox: false,
+	selectionIndicator: false,
+    });
+}
+catch (error) {
+    // One example of a error being thrown at this point is if your browser doesn't support WebGL
+    console.error("Failed to create Cesium Viewer");
+}
 
 // The viewer object's camera
 const cam = viewer.camera;
