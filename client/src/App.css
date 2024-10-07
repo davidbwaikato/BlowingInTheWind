@@ -111,11 +111,16 @@ body {
   background: #be0403;
   /* text-shadow: -2px 0 rgb(125, 55, 1), 0 2px rgb(125, 55, 1), 2px 0 rgb(125, 55, 1), 0 -2px rgb(125, 55, 1); */
   text-shadow: -2px 0 rgb(80, 25, 1), 0 2px rgb(80, 25, 1), 2px 0 rgb(80, 25, 1), 0 -2px rgb(80, 25, 1);
-  background-image: url('balloon.svg');
-  background-repeat: no-repeat;
-  background-position: right;
+  /*background-image: url('balloon.svg'); */
+  /* background-repeat: no-repeat; */
+  /* background-position: right; */
   position: relative;
-  cursor: pointer;
+  /* cursor: pointer; */
+}
+.chat-header img {
+    margin-top: 4px;
+    margin-bottom: 4px;
+    float: right;
 }
 
 .chat-window .chat-header p {
@@ -327,4 +332,33 @@ body {
   color: #000000;
   /* background-color: #a9dbf5; */
   background-color: #fff0c7;  
+}
+
+
+.cesium-animation-rectButton .cesium-animation-buttonMain {
+    stroke: #444;
+    stroke-width: 1.2;
+}
+
+
+
+animation-buttonGlow {
+    display: block;
+    /* fill: #2e2; */
+    fill: #e22;
+}
+
+.cesium-animation-buttonToggled .cesium-animation-buttonGlow {
+    display: block;
+    /* fill: #2e2; */
+    fill: #e22;
+}
+.cesium-animation-buttonToggled:hover .cesium-animation-buttonMain {
+    /*stroke: #2e2; */
+    stroke: #e22;
+}
+
+.cesium-animation-buttonToggled .cesium-animation-buttonMain {
+    /* stroke: #2e2; */
+    stroke: #e22;
 }

@@ -402,7 +402,7 @@ html, body {
     overflow: hidden;
 }
 
-img {
+img.background-cover {
     position: absolute;
     top: 5%;
     left: 0;

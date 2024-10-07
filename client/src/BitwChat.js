@@ -6,6 +6,9 @@ function BitwChat({socket, username, room}) {
     const [messageList, setMessageList] = useState([]);
     const [scoreList, setScoreList] = useState([]);
 
+    const [playAudioBackground, setPlayAudioBackground] = useState(true);
+    const [playAudioMusic,      setPlayAudioMusic] = useState(true);
+    
     const sendMessage = async () =>{
         if(currentMessage !== "" ){
             const messageData = {
@@ -59,10 +62,71 @@ function BitwChat({socket, username, room}) {
     };
     }, [socket]);
 
+    // audio-background1
+
+
+    useEffect(() => {
+	console.log('Init Background Audio');
+	const audio = document.getElementById('audio-background1');
+	audio.volume = 0.0;
+	
+	const audio_crossfade_in_thresh_perc  = 0.05;	
+	const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
+	const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
+	
+	audio.addEventListener("timeupdate", function(){
+	    //console.log("timeudpate");
+	    //console.log(audio);
+
+	    const duration = audio.duration;
+	    const current_time = audio.currentTime;
+	    const progress = current_time / duration;
+	    console.log("Progress = " + progress);
+	    
+	    if (progress <= audio_crossfade_in_thresh_perc) {
+		const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
+		console.log("Fading in: vol = " + crossfade_vol);
+		audio.volume = crossfade_vol;
+	    }
+	    else if (progress >= audio_crossfade_out_thresh_perc) {
+		const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
+		console.log("Fading out: vol = " + crossfade_vol);
+		audio.volume = crossfade_vol;
+	    }
+	});
+
+	audio.play();
+    }, []); // Empty array ensures it runs only once
+    
+    const togglePlayAudioBackground = () => {
+	const audio = document.getElementById('audio-background1');
+	const toggle_play_icon = document.getElementById('play-audio-background');
+
+	if (playAudioBackground) {
+	    audio.muted = true;
+	    toggle_play_icon.src = "icons/audio-background-off.svg";
+	    setPlayAudioBackground(false);
+	}
+	else {
+	    audio.muted = false;
+	    toggle_play_icon.src = "icons/audio-background-on.svg";
+	    setPlayAudioBackground(true);
+	}
+    };
+    
+    const togglePlayAudioMusic = () => {
+    };
+
+    
+    
     return (
         <div className= "chat-window">
             <div className="chat-header">
-                <p>Blowing in the Wind</p>
+            <p>
+	      Blowin&#x27; in the Wind
+	    <img id="play-audio-background" src="icons/audio-background-on.svg" style={{height: '32px'}} onClick={togglePlayAudioBackground} />
+	    <img id="play-audio-music"      src="icons/audio-music-on.svg"      style={{height: '32px'}} onClick={togglePlayAudioMusic}/>
+	    </p>
             </div>
             <div className="chat-body">
             <ScrollToBottom className="message-container">

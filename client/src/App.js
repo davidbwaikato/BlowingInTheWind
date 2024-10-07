@@ -38,9 +38,10 @@ function App() {
            setRoom(event.target.value);
           }}
 	  onKeyUp={(event) => {
-	      console.log("room id key up");
-	      console.log(event);	      
-	      if (event.keyCode === 13 || event.which === 13) {
+	      //console.log("room id key up");
+	      //console.log(event);
+	      if (event.key === 'Enter') {
+	      //if (event.keyCode === 13 || event.which === 13) {
 		  joinRoom();
 	      }
 	  }}	  
