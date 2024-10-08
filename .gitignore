@@ -2,5 +2,6 @@ config.js
 SETUP.bash
 client/package-lock.json
 client/node_modules/
+client/public/audio/weather-playlist/*.mp3
 server/package-lock.json
 server/node_modules/
