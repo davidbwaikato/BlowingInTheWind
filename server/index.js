@@ -1,15 +1,20 @@
+const fs      = require('fs');
+const path    = require('path');
 
-//gets the libraries 
 const express = require("express");
-const app = express();
-const http = require("http");
-const cors = require("cors");
+const http    = require("http");
+const cors    = require("cors");
+
 const {Server} = require("socket.io");
-const path = require("path"); // Import the path module
+
 var serveindex = require('serve-index')
 
 const SERVER_PORT = process.env.BITW_SERVER_PORT || 3001;
 const CLIENT_URL  = process.env.BITW_CLIENT_URL || "http://localhost:3001";
+
+BITW_APP_NAME = "BITW";
+
+const app = express();
 
 app.use(cors());
 
@@ -22,7 +27,9 @@ app.use((req, res, next) => {
 });
 
 // Serve static files from the "public" directory
-app.use(express.static(path.join(__dirname, '../client/build')));
+const FullBuildDirectory = path.join(__dirname, '..','client','build');
+app.use(express.static(FullBuildDirectory));
+//app.use(express.static(path.join(__dirname, '../client/build'))); // ****
 
 var chat = __dirname + '/src';
 app.use('/src', serveindex(chat));
@@ -34,8 +41,6 @@ cors_origin = CLIENT_URL
 const server =  http.createServer(app);
 const io = new Server(server, {
     cors: {
-        //might change when we have our own dowmain 
-        //origin: "http://localhost:3000",
         origin: cors_origin,
         methods: ["GET", "POST"],
     },
@@ -239,6 +244,75 @@ io.on("connection", (socket) => {
         return roomCounts;
     }
 });
+
+function readdir_mp3_filelist(mp3_directory)
+{
+    // Default is for there to be no files listed
+    let returnJSON = { "status": null, "mp3-filelist": [] };
+    
+    let mp3_files = []
+    
+    const full_mp3_directory = path.join(FullBuildDirectory,'audio',mp3_directory)
+
+    try {
+
+	//if (!fs.lstatSync(full_mp3_directory).isDirectory()) {
+	if (!fs.existsSync(full_mp3_directory)) {
+	    const warn_message = "Warning: Failed to find directory: "
+		  + full_mp3_directory + "\n"
+	          + "No music tracks will be available to be played while playing ${BITW_APP_NAME}";
+	    console.warn(warn_message);
+	    
+	    returnJSON['warning']  = `Failed to find '${mp3_directory}'.  No music tracks will be played while playing ${BITW_APP_NAME}`;
+	}
+	else {
+	    let files = fs.readdirSync(full_mp3_directory,"utf8");
+	    
+	    files.forEach(function (file) {
+		let full_mp3_file = path.join(full_mp3_directory, file);
+		
+		if (file.endsWith(".mp3")) {
+		    mp3_files.push(file);
+		}
+	    });
+
+	    returnJSON['mp3-filelist'] = mp3_files;
+	}
+	
+	returnJSON['status'] = "ok";		
+    }
+    catch (err) {
+	const err_message = "Failed to read directory: " + full_mp3_directory;
+	
+	console.error(err_message);
+	console.error();
+	console.error(err);
+
+	returnJSON['status'] ="failed";
+	returnJSON['error']  = `Failed to read directory '${mp3_directory}'`;
+    }
+
+    return returnJSON;
+}
+    
+
+app.get('/get-audio-music-playlist', (req, res) => {
+
+    res.setHeader("Content-Type", "application/json");
+
+    mp3_filelist_rec = readdir_mp3_filelist("music");
+    
+    res.end(JSON.stringify(mp3_filelist_rec));
+})
+
+app.get('/get-audio-background-playlist', (req, res) => {
+
+    res.setHeader("Content-Type", "application/json");
+
+    mp3_filelist_rec = readdir_mp3_filelist("ambient-background");
+    
+    res.end(JSON.stringify(mp3_filelist_rec));
+})
 
 server.listen(SERVER_PORT, ()=> {
     console.log(`Web + Socket.IO server running on port ${SERVER_PORT}`);
