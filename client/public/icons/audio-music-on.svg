@@ -1,3 +1,47 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-<g transform="translate(-71.09-24.1)"><path d="m470.58 538.78c-.397.111-.716.554-.716.984v6.817c-.402-.22-.919-.31-1.454-.164-.966.263-1.572 1.113-1.365 1.898.207.785 1.159 1.223 2.125.96.771-.21 1.302-.803 1.387-1.429l.022-6.442 5.01-1.406v5.083c-.402-.22-.919-.31-1.454-.164-.966.263-1.572 1.113-1.365 1.897.207.785 1.159 1.223 2.125.96.771-.21 1.302-.803 1.387-1.429l.022-8.386c0-.323-.19-.564-.447-.609l-5.28 1.429" fill="#ffffff" transform="translate(-392.57-511.24)"/></g></svg>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   version="1.1"
+   x="0px"
+   y="0px"
+   viewBox="0 0 100 100"
+   enable-background="new 0 0 100 100"
+   xml:space="preserve"
+   id="svg1"
+   sodipodi:docname="audio-music-off.svg"
+   inkscape:version="1.3.2 (091e20e, 2023-11-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+      id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="5.7699913"
+     inkscape:cx="72.357128"
+     inkscape:cy="66.724537"
+     inkscape:window-width="1850"
+     inkscape:window-height="1016"
+     inkscape:window-x="70"
+     inkscape:window-y="27"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1"
+     showgrid="false" />
+  <g
+     transform="matrix(5.4511282,0,0,5.4511282,-384.78818,-125.34033)"
+     id="musicnotes"
+     inkscape:label="#musicnotes">
+    <path
+       d="m 470.58,538.78 c -0.397,0.111 -0.716,0.554 -0.716,0.984 v 6.817 c -0.402,-0.22 -0.919,-0.31 -1.454,-0.164 -0.966,0.263 -1.572,1.113 -1.365,1.898 0.207,0.785 1.159,1.223 2.125,0.96 0.771,-0.21 1.302,-0.803 1.387,-1.429 l 0.022,-6.442 5.01,-1.406 v 5.083 c -0.402,-0.22 -0.919,-0.31 -1.454,-0.164 -0.966,0.263 -1.572,1.113 -1.365,1.897 0.207,0.785 1.159,1.223 2.125,0.96 0.771,-0.21 1.302,-0.803 1.387,-1.429 l 0.022,-8.386 c 0,-0.323 -0.19,-0.564 -0.447,-0.609 l -5.28,1.429"
+       fill="#ffffff"
+       transform="translate(-392.57,-511.24)"
+       id="path1-8" />
+  </g>
+</svg>
