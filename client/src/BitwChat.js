@@ -62,44 +62,48 @@ function BitwChat({socket, username, room}) {
     };
     }, [socket]);
 
-    // audio-background1
+    // audio-background and audio-music
+    
+    const audio_crossfade_in_thresh_perc  = 0.05;
+    const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
+    const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
+    
+    const crossfade_audio = function(audio_elem) {
+	//console.log("timeudpate");
+	//console.log(audio_elem);
+	
+	const duration = audio_elem.duration;
+	const current_time = audio_elem.currentTime;
+	const progress = current_time / duration;
+	//console.log("Progress = " + progress);
+	
+	if (progress <= audio_crossfade_in_thresh_perc) {
+	    const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
+	    //console.log("Fading in: vol = " + crossfade_vol);
+	    audio_elem.volume = crossfade_vol;
+	}
+	else if (progress >= audio_crossfade_out_thresh_perc) {
+	    const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
+	    //console.log("Fading out: vol = " + crossfade_vol);
+	    audio_elem.volume = crossfade_vol;
+	}
+    };
 
 
     useEffect(() => {
 	console.log('Init Background Audio');
-	const audio = document.getElementById('audio-background1');
-	audio.volume = 0.0;
-	
-	const audio_crossfade_in_thresh_perc  = 0.05;	
-	const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
-	const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
-	
-	audio.addEventListener("timeupdate", function(){
-	    //console.log("timeudpate");
-	    //console.log(audio);
-
-	    const duration = audio.duration;
-	    const current_time = audio.currentTime;
-	    const progress = current_time / duration;
-	    console.log("Progress = " + progress);
-	    
-	    if (progress <= audio_crossfade_in_thresh_perc) {
-		const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
-		console.log("Fading in: vol = " + crossfade_vol);
-		audio.volume = crossfade_vol;
-	    }
-	    else if (progress >= audio_crossfade_out_thresh_perc) {
-		const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
-		console.log("Fading out: vol = " + crossfade_vol);
-		audio.volume = crossfade_vol;
-	    }
+	const audio_background = document.getElementById('audio-background');
+	audio_background.volume = 0.0;
+		
+	audio_background.addEventListener("timeupdate", function() {
+	    crossfade_audio(audio_background);
 	});
 
-	audio.play();
+	audio_background.play();
     }, []); // Empty array ensures it runs only once
     
     const togglePlayAudioBackground = () => {
-	const audio = document.getElementById('audio-background1');
+	const audio = document.getElementById('audio-background');
 	const toggle_play_icon = document.getElementById('play-audio-background');
 
 	if (playAudioBackground) {
@@ -115,6 +119,19 @@ function BitwChat({socket, username, room}) {
     };
     
     const togglePlayAudioMusic = () => {
+	const audio = document.getElementById('audio-music');
+	const toggle_play_icon = document.getElementById('play-audio-music');
+
+	if (playAudioMusic) {
+	    audio.muted = true;
+	    toggle_play_icon.src = "icons/audio-music-off.svg";
+	    setPlayAudioMusic(false);
+	}
+	else {
+	    audio.muted = false;
+	    toggle_play_icon.src = "icons/audio-music-on.svg";
+	    setPlayAudioMusic(true);
+	}	
     };
 
     
@@ -124,8 +141,13 @@ function BitwChat({socket, username, room}) {
             <div className="chat-header">
             <p>
 	      Blowin&#x27; in the Wind
-	    <img id="play-audio-background" src="icons/audio-background-on.svg" style={{height: '32px'}} onClick={togglePlayAudioBackground} />
-	    <img id="play-audio-music"      src="icons/audio-music-on.svg"      style={{height: '32px'}} onClick={togglePlayAudioMusic}/>
+	      <img id="play-audio-background" src="icons/audio-background-on.svg" style={{height: '32px'}} onClick={togglePlayAudioBackground} />
+	      <img id="play-audio-music"      src="icons/audio-music-on.svg"      style={{height: '32px'}} onClick={togglePlayAudioMusic}/>
+	      <div style={{display: 'none'}}>
+	        /* load in display none div, to pre-cache */
+	        <img src="icons/audio-background-off.svg" style={{height: '32px'}}/>
+	        <img src="icons/audio-music-on.svg"       style={{height: '32px'}}/>
+	      </div>
 	    </p>
             </div>
             <div className="chat-body">
