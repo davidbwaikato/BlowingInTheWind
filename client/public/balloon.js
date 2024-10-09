@@ -71,6 +71,7 @@ function loadModel() {
   loader.load(
     filePath,
     function (gltf) {
+      console.log("Balloon model loaded");
       //If the file is loaded, add it to the scene
       object = gltf.scene;
       // Remove previous object from the scene if it exists
@@ -99,8 +100,10 @@ function loadModel() {
 
     },
     function (xhr) {
-      //While it is loading, log the progress
-      console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+	//While it is loading, log the progress
+	if (xhr.total > 0) {
+	    console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+	}
     },
     function (error) {
       //If there is an error, log it
