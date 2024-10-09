@@ -62,35 +62,36 @@ function BitwChat({socket, username, room}) {
     };
     }, [socket]);
 
-    // audio-background and audio-music
-    
-    const audio_crossfade_in_thresh_perc  = 0.05;
-    const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
-    const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
-    
-    const crossfade_audio = function(audio_elem) {
-	//console.log("timeudpate");
-	//console.log(audio_elem);
-	
-	const duration = audio_elem.duration;
-	const current_time = audio_elem.currentTime;
-	const progress = current_time / duration;
-	//console.log("Progress = " + progress);
-	
-	if (progress <= audio_crossfade_in_thresh_perc) {
-	    const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
-	    //console.log("Fading in: vol = " + crossfade_vol);
-	    audio_elem.volume = crossfade_vol;
-	}
-	else if (progress >= audio_crossfade_out_thresh_perc) {
-	    const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
-	    //console.log("Fading out: vol = " + crossfade_vol);
-	    audio_elem.volume = crossfade_vol;
-	}
-    };
-
+    // audio-background and audio-music    
 
     useEffect(() => {
+
+	const audio_crossfade_in_thresh_perc  = 0.05;
+	const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
+	const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
+	
+	const crossfade_audio = (audio_elem) => {
+	    //console.log("timeudpate");
+	    //console.log(audio_elem);
+	    
+	    const duration = audio_elem.duration;
+	    const current_time = audio_elem.currentTime;
+	    const progress = current_time / duration;
+	    //console.log("Progress = " + progress);
+	    
+	    if (progress <= audio_crossfade_in_thresh_perc) {
+		const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
+		//console.log("Fading in: vol = " + crossfade_vol);
+		audio_elem.volume = crossfade_vol;
+	    }
+	    else if (progress >= audio_crossfade_out_thresh_perc) {
+		const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
+		//console.log("Fading out: vol = " + crossfade_vol);
+		audio_elem.volume = crossfade_vol;
+	    }
+	};
+		
+	
 	console.log('Init Background Audio');
 	const audio_background = document.getElementById('audio-background');
 	audio_background.volume = 0.0;
@@ -141,13 +142,13 @@ function BitwChat({socket, username, room}) {
             <div className="chat-header">
             <p>
 	      Blowin&#x27; in the Wind
-	      <img id="play-audio-background" src="icons/audio-background-on.svg" style={{height: '32px'}} onClick={togglePlayAudioBackground} />
-	      <img id="play-audio-music"      src="icons/audio-music-on.svg"      style={{height: '32px'}} onClick={togglePlayAudioMusic}/>
-	      <div style={{display: 'none'}}>
-	        /* load in display none div, to pre-cache */
-	        <img src="icons/audio-background-off.svg" style={{height: '32px'}}/>
-	        <img src="icons/audio-music-on.svg"       style={{height: '32px'}}/>
-	      </div>
+	      <img id="play-audio-background" src="icons/audio-background-on.svg" style={{height: '32px'}} alt="Toogle ambient sound"    onClick={togglePlayAudioBackground} />
+	      <img id="play-audio-music"      src="icons/audio-music-on.svg"      style={{height: '32px'}} alt="Toggle background music" onClick={togglePlayAudioMusic}/>
+	      <span style={{display: 'none'}}>
+	        {/* load in display none div, to pre-cache */}
+	        <img alt="" src="icons/audio-background-off.svg" style={{height: '32px'}}/>
+	        <img alt="" src="icons/audio-music-on.svg"       style={{height: '32px'}}/>
+	      </span>
 	    </p>
             </div>
             <div className="chat-body">
