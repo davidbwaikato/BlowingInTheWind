@@ -1,14 +1,19 @@
 /////////////  PUBLIC //////////////
 
-// Import config.js
 import config from "./config.js";
-//Import weather.js to bitw script
 import { fetchWeatherData } from "./weather.js";
 
 // Set access token
 Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 
 const SERVER_URL  = config.SERVER_URL
+
+const DefaultStartingPosition = {
+    // The Pa:
+    'lat'   : -37.7884167,
+    'long'  : 175.3175556,
+    'height': 100.0
+}
 
 /*********************************
  * SETUP
@@ -27,13 +32,18 @@ catch (error) {
     console.error("Failed to create Cesium Viewer");
 }
 
-// The viewer object's camera
-const cam = viewer.camera;
+// // The viewer object's camera
+// **** The following can likely be removed, as not referenced anywhere in this file
+// and is easy enough to access if needed at any given point via viewer.camera
+//const camUNUSED = viewer.camera;
 
 // Set default camera pitch
 const pitchAngle = Cesium.Math.toRadians(-15.0);
 const cameraOffset = new Cesium.HeadingPitchRange(0.0, pitchAngle, 300.0);
-viewer.scene.screenSpaceCameraController.enableZoom = false;
+if (viewer != null) {
+    // **** Can this be moved earlier, when viewer is created??
+    viewer.scene.screenSpaceCameraController.enableZoom = false;
+}
 
 const nextCityButton = document.getElementById("next-city");
 
@@ -44,12 +54,15 @@ var balloon;
 /*********************************
  * VISUALISE BUILDINGS
  *********************************/
-// Google Map's Photorealistic 3d Tileset
-try {
-  const buildingTileSet = await Cesium.createGooglePhotorealistic3DTileset();
-  viewer.scene.primitives.add(buildingTileSet);
-} catch (error) {
-  console.log(`Failed to load tileset: ${error}`);
+if (viewer != null) {
+    // Google Map's Photorealistic 3d Tileset
+    try {
+	const buildingTileSet = await Cesium.createGooglePhotorealistic3DTileset();
+	viewer.scene.primitives.add(buildingTileSet);
+    }
+    catch (error) {
+	console.log(`Failed to load tileset: ${error}`);
+    }
 }
 
 /*********************************
@@ -74,7 +87,7 @@ var currentCityIndex = 0;
 // Array of a random point around different cities
 let randomPointsArray = [];
 
-function shuffleArray(array){
+function shuffleArrayUNUSED(array){
   let currentIndex = array.length;
   while(currentIndex != 0){
       let randomIndex = Math.floor(Math.random() * currentIndex);
@@ -86,7 +99,8 @@ function shuffleArray(array){
 
 // Generate a random point on all cities in the cities array
 // This function also randomises the city sequence
-function generateRandomPoints(newCity){
+function generateRandomPoints(newCity) {
+  console.log("generateRandomPoints()")
   let randomPoint = null;
   while(randomPoint == null){
     randomPoint = getNearbyLocation(newCity.coordinates);
@@ -139,14 +153,14 @@ viewer.clock.currentTime = startTime.clone();
 viewer.clock.multiplier = 1;
 //viewer.clock.shouldAnimate = true;
 
-  // Array to store path positions
-  let positionArray = [];
-  // Track the last time generatePath that was called
-  let lastGeneratePathTime = viewer.clock.currentTime;
-  let pathEntityInterval = 100;
-  let pathSpeed = 0.1;
-  let pathEntitiesRemoved = 0;
-  let epsilon = 0.00005;   // tolerance value
+// Array to store path positions
+let positionArray = [];
+// Track the last time generatePath that was called
+let lastGeneratePathTime = viewer.clock.currentTime;
+let pathEntityInterval = 100;
+let pathSpeed = 0.1;
+let pathEntitiesRemoved = 0;
+let epsilon = 0.00005;   // tolerance value
 
 /* CREATE PATH */
 // Create the path for the target object
@@ -220,8 +234,8 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
 }
 
 /* Create animated path*/
-  // Generate animated path
-  async function animatePath(pEntity) {
+// Generate animated path
+async function animatePath(pEntity) {
     // Create SampledPositionProperty
     //console.log("LOG 1 (animatePath):", new Date().toISOString());
     const positionProperty = new Cesium.SampledPositionProperty();
@@ -231,7 +245,11 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
     //positionProperty.addSample(pEntityStartTime, startPos); 
     
     //add first position
-    positionProperty.addSample(pEntityStartTime, randomPointsArray[currentCityIndex - 1].coordinates);
+    //positionProperty.addSample(pEntityStartTime, randomPointsArray[currentCityIndex - 1].coordinates); // **** !!!!! XXXXX
+    positionProperty.addSample(pEntityStartTime, randomPointsArray[currentCityIndex].coordinates);
+    console.log(pEntity);
+    //positionProperty.addSample(pEntityStartTime, pEntity.position);
+    
     //console.log("Path Point One: " + randomPointsArray[currentCityIndex].coordinates)
     nextTimeStep = pEntityStartTime;
     
@@ -357,8 +375,11 @@ async function getNextPoint(originPoint) {
 
 // Teleport to next location
 async function nextCity() {
+  console.log("nextCity()");
+    
   // Get random points using city data
-  await generateRandomPoints(city);
+  // ****
+  generateRandomPoints(city);
   // Reset position
   startTime = viewer.clock.currentTime;
   // Initialise nextTimeStep
@@ -368,7 +389,8 @@ async function nextCity() {
   viewer.clock.currentTime = startTime.clone();
 
   // Create wind path for next city in the list. Spawn balloon on that location.
-  createPath(balloon, randomPointsArray[currentCityIndex].coordinates, numPoints, timeStepInSeconds);
+  // ****
+  await createPath(balloon, randomPointsArray[currentCityIndex].coordinates, numPoints, timeStepInSeconds);
   //console.log(randomPointsArray[currentCityIndex].cityName);
   //reset clock
   viewer.clock.multiplier = 1;
@@ -376,7 +398,7 @@ async function nextCity() {
   // Increment city index
   currentCityIndex++;
   // Loop back if reached last city
-  if (currentCityIndex > randomPointsArray.length) {
+  if (currentCityIndex >= randomPointsArray.length) { // ****
     currentCityIndex = 0;
   }
 
@@ -389,6 +411,8 @@ async function nextCity() {
 
 // Finds a location near a city's centre coordinate
 function getNearbyLocation(cityCartesianPoint){
+  console.log(`getNearbyLocation(${cityCartesianPoint})`);
+    
   const EARTH_R = 6371 * Math.pow(10, 3);
   const MAX_R = 10000; // 10000m 
 
@@ -420,6 +444,7 @@ function getNearbyLocation(cityCartesianPoint){
   if (distance < MAX_R && distance > 0){
     return Cesium.Cartesian3.fromDegrees(ran_lon_deg, ran_lat_deg, 300);
   } else {
+    console.log("Randomized nearby location out of bounds, returning null");
     return null;
   }
 }
@@ -438,7 +463,8 @@ balloon = viewer.entities.add({
     }),
   ]),
   // Use path created by the function
-  position: Cesium.Cartesian3.fromDegrees(175.3177, -37.78765, 300.0),
+  //position: Cesium.Cartesian3.fromDegrees(175.3177, -37.78765, 300.0),
+  position: Cesium.Cartesian3.fromDegrees(DefaultStartingPosition.long,DefaultStartingPosition.lat,DefaultStartingPosition.height),
   // Placeholder entity visuals
   ellipsoid: {
     radii: new Cesium.Cartesian3(52.0, 52.0, 52.0),
@@ -487,8 +513,40 @@ style.textContent = `
 document.head.appendChild(style);
 
 //Create pathEntityentity
-async function createPathEntity(){
-  //console.log("entity creation");
+async function createPathEntity() {
+  console.log("createPathEntity()");
+
+  console.log("**** createPathEntity(): currentCityIndex = " + currentCityIndex)
+  console.log(JSON.stringify(randomPointsArray))
+
+  const currentCityCoords = randomPointsArray[currentCityIndex].coordinates
+  console.log("currentCityCoords = " + JSON.stringify(currentCityCoords));
+
+
+    // Define key dimensions of array, in metres
+    const arrowBodyLength = 20.0; 
+    const arrowBodyWidth  =  6.0;  
+    const arrowTipFlange  =  5.0;
+    const arrowTipLength  = 10.0;
+    
+
+  let arrowPositions = [
+      new Cesium.Cartesian3(-arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-left
+      new Cesium.Cartesian3( arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-right
+      new Cesium.Cartesian3( arrowBodyWidth/2,                   -arrowBodyLength/2, 0),  // Body Top-right
+      new Cesium.Cartesian3( arrowBodyWidth/2 + arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-right
+      new Cesium.Cartesian3(                                 0,  -(arrowBodyLength/2 + arrowTipLength), 0),  // Arrowhead Apex
+      new Cesium.Cartesian3(-arrowBodyWidth/2 - arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-left
+      new Cesium.Cartesian3(-arrowBodyWidth/2,                   -arrowBodyLength/2, 0)   // Body Top-left
+  ];
+
+  for (let arrowPosition of arrowPositions) {
+	arrowPosition.x += currentCityCoords.x;
+	arrowPosition.y += currentCityCoords.y;
+	arrowPosition.z += currentCityCoords.z;
+  }
+
+    
   const pathEntity = viewer.entities.add({ 
     name: "Path Entity",
     // Move entity via simulation time
@@ -499,15 +557,36 @@ async function createPathEntity(){
         stop: Cesium.JulianDate.addSeconds(viewer.clock.currentTime, timeStepInSeconds * numPoints, new Cesium.JulianDate()),
       }),
     ]),
-    // Use the same starting position as the target entity
-    position: randomPointsArray[currentCityIndex], // Change this to random position on map
 
+    // Use the same starting position as the target entity
+    //position: randomPointsArray[currentCityIndex], // Change this to random position on map
+    // ****
+    //position: randomPointsArray[currentCityIndex].coordinates, // Change this to random position on map
+    position: currentCityCoords,
+      
     box : {
       dimensions : new Cesium.Cartesian3(20, 6, 1),
       material : Cesium.Color.BLUE,
       //outline : true,
       outlineColor : Cesium.Color.YELLOW
     },
+      
+      
+/*    
+    polygon: {
+	//hierarchy: new Cesium.PolygonHierarchy(rectanglePositions),
+	hierarchy: arrowPositions,
+	material : Cesium.Color.WHITE,
+	perPositionHeight: true,
+	//height: 0,
+	outline : true,
+	outlineColor : Cesium.Color.BLACK,
+	outlineWidth : 3
+	
+    },
+    
+  */    
+      
     // path: {
     //   resolution: 1,
     //   material: new Cesium.PolylineGlowMaterialProperty({
@@ -520,18 +599,20 @@ async function createPathEntity(){
 
   //console.log("LOG: Entity created at", new Date().toISOString());
 
-  console.log("**** creatPathEntity(): currentCityIndex = " + currentCityIndex)
-  console.log(randomPointsArray)
-    
+  //console.log("Supressing animatePath()");
   await animatePath(pathEntity);
   //console.log("LOG: Path animation completed at", new Date().toISOString());
 }
+
+
+
+
 
 //createPathEntity();
 function generateAnimatedPath(){
   //console.log("generate method called");
   if(viewer.clock.shouldAnimate){
-    //console.log("clock animated");
+    console.log("clock animated");
     createPathEntity();
   }
 }
@@ -691,7 +772,7 @@ window.joinRoom = function(room){
 }
 
 socket.on("city_data", (data) => {
-  console.log("socket.on('city_data') data:", data)
+    console.log("socket.on('city_data') data:", data)
   // ********** We need to convert data.coordinates into something cesium can understand **************
   var newCoords = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]);
   let temp = { cityName: data.city, coordinates: newCoords };
