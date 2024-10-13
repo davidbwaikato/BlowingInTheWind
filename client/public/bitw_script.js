@@ -9,11 +9,14 @@ Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 const SERVER_URL  = config.SERVER_URL
 
 const DefaultStartingPosition = {
-    // The Pa:
+    // University of Waikato (Hamilton campus):
     'lat'   : -37.7884167,
     'long'  : 175.3175556,
     'height': 100.0
 }
+
+const DefaultFlyingAltitudeMeters = 300.0; // meters
+const DefaultPitchAngleRad        = Cesium.Math.toRadians(-15.0);
 
 /*********************************
  * SETUP
@@ -32,20 +35,12 @@ catch (error) {
     console.error("Failed to create Cesium Viewer");
 }
 
-// // The viewer object's camera
-// **** The following can likely be removed, as not referenced anywhere in this file
-// and is easy enough to access if needed at any given point via viewer.camera
-//const camUNUSED = viewer.camera;
 
-// Set default camera pitch
-const pitchAngle = Cesium.Math.toRadians(-15.0);
-const cameraOffset = new Cesium.HeadingPitchRange(0.0, pitchAngle, 300.0);
+const cameraOffset = new Cesium.HeadingPitchRange(0.0, DefaultPitchAngleRad, DefaultFlyingAltitudeMeters);
 if (viewer != null) {
     // **** Can this be moved earlier, when viewer is created??
     viewer.scene.screenSpaceCameraController.enableZoom = false;
 }
-
-const nextCityButton = document.getElementById("next-city");
 
 var balloon = null;
 
@@ -80,60 +75,119 @@ function cartesianToDegrees(cartesian) {
   return {longitude, latitude};
 }
 
-var city;
+var JourneyItinerary = {
+    cityInfoArray:           [],
+    startingCityPointsArray: [],
+    currentCityIndexPos:     -1,
+};
 
-// Index iterator
-var currentCityIndex = 0;
+function appendCity(new_city_info)
+{
+    console.log("appendCity(new_city_info)");
+    console.log("  adding: " + new_city_info);
 
-// Array of a random point around different cities
-let randomPointsArray = [];
+    JourneyItinerary.cityInfoArray.push(new_city_info);
+    generateRandomStartingPoint(new_city_info);
+    
+    JourneyItinerary.currentCityIndexPos++;
+    
+}
 
-function shuffleArrayUNUSED(array){
-  let currentIndex = array.length;
-  while(currentIndex != 0){
-      let randomIndex = Math.floor(Math.random() * currentIndex);
-      currentIndex--;
+function getCurrentCityInfo()
+{
+    if (JourneyItinerary.currentCityIndexPos >= 0) {
+	return JourneyItinerary.cityInfoArray[JourneyItinerary.currentCityIndexPos];
+    }
+    else
+    {
+	return null;
+    }
+}
 
-      [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+function getCurrentStartingCoordXYZ()
+{
+    if (JourneyItinerary.currentCityIndexPos >= 0) {
+	return JourneyItinerary.startingCityPointsArray[JourneyItinerary.currentCityIndexPos].coord_xyz;
+    }
+    else
+    {
+	return null;
+    }
+}
+
+// Finds a location near a city's centre coordinate
+function getNearbyLocation(cityCartesianPoint){
+  console.log(`getNearbyLocation(${cityCartesianPoint})`);
+    
+  const EARTH_R = 6371 * Math.pow(10, 3);
+  const MAX_R = 10000; // 10000m 
+
+  let cityCartographicPoint = Cesium.Cartographic.fromCartesian(cityCartesianPoint);
+  let city_lon_deg = Cesium.Math.toDegrees(cityCartographicPoint.longitude);
+  let city_lat_deg = Cesium.Math.toDegrees(cityCartographicPoint.latitude);
+
+  let lonOffset = Math.floor(Math.random() - 0.5) * 0.03;
+  let latOffset = Math.floor(Math.random() - 0.5) * 0.03;
+
+  let ran_lon_deg = city_lon_deg + lonOffset;
+  let ran_lat_deg = city_lat_deg + latOffset;
+
+  let lat1 = city_lat_deg * (Math.PI / 180);
+  let lat2 = ran_lat_deg * (Math.PI / 180);
+  let lon1 = city_lon_deg;
+  let lon2 = ran_lon_deg;
+
+  let changeLat = (lat2 - lat1) * Math.PI / 180;
+  let changeLon = (lon2 - lon1) * Math.PI / 180;
+
+  let a = Math.sin(changeLat / 2) * Math.sin(changeLat / 2) +
+          Math.cos(lat1) * Math.cos(lat2) *
+          Math.sin(changeLon / 2) * Math.sin(changeLon / 2); 
+  let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  let distance = EARTH_R * c;
+
+  //console.log(distance);
+  if (distance < MAX_R && distance > 0){
+    return Cesium.Cartesian3.fromDegrees(ran_lon_deg, ran_lat_deg, DefaultFlyingAltitudeMeters);
+  } else {
+    console.log("Randomized nearby location out of bounds, returning null");
+    return null;
   }
 }
 
-// **** The following comment does not seem to match with
-//      what the code below does
-// **** What the code does also seems to duplicate entities uncessarily
-//
-// Generate a random point on all cities in the cities array
-// This function also randomises the city sequence
-function generateRandomPoints(newCity) {
-  console.log("generateRandomPoints()")
-  let randomPoint = null;
-  while(randomPoint == null){
-    randomPoint = getNearbyLocation(newCity.coordinates);
+
+function generateRandomStartingPoint(newCity)
+{
+  console.log("generateRandomStartingPoint()");
+    
+  let randomStartingPoint = null;
+  while(randomStartingPoint == null){
+    randomStartingPoint = getNearbyLocation(newCity.coord_xyz);
   }
 
-  let randomPointObj = {cityName: newCity.cityName, coordinates: randomPoint}
-  randomPointsArray.push(randomPointObj);
+  let randomStartingPointInfo = { cityName: newCity.cityName, coord_xyz: randomStartingPoint };
+  console.log("Pushing on cityInfo randomStatingPoint: " + JSON.stringify(randomStartingPointInfo));
+  JourneyItinerary.startingCityPointsArray.push(randomStartingPointInfo);
 
-  viewer.entities.add({
-    position: newCity.coordinates,
-    name: newCity.cityName,
-    //point: { pixelSize: 15, color: Cesium.Color.BLUE }
-  });
+  if (viewer != null) {
 
-  // ****
-  console.log("**** Unclear why all the points in randomPointsArray are added in again as entities");  
-  for(let i = 0; i < randomPointsArray.length; i++){
-    viewer.entities.add({
-      position: randomPointsArray[i].coordinates,
-      name: randomPointsArray[i].cityName,
-      //point: { pixelSize: 15, color: Cesium.Color.GREEN }
-    });
+      viewer.entities.add({
+	  position: newCity.coord_xyz,
+	  name: newCity.cityName,
+	  //point: { pixelSize: 15, color: Cesium.Color.BLUE }
+      });
+
+      // ****
+      console.log("**** Unclear why all the points in JourneyItinerary.startingCityPointsArray are added in again as entities");  
+      for(let i = 0; i < JourneyItinerary.startingCityPointsArray.length; i++){
+	  viewer.entities.add({
+	      position: JourneyItinerary.startingCityPointsArray[i].coord_xyz,
+	      name: JourneyItinerary.startingCityPointsArray[i].cityName,
+	      //point: { pixelSize: 15, color: Cesium.Color.GREEN }
+	  });
+      }
   }
 }
-
-
-// Call randomise function
-//generateRandomPoints();
 
 //gets the wind data and stores it to the module level variables 
 async function fetchAndStoreWind(latitude, longitude){
@@ -263,12 +317,13 @@ async function animatePath(pEntity) {
     //positionProperty.addSample(pEntityStartTime, startPos); 
     
     //add first position
-    //positionProperty.addSample(pEntityStartTime, randomPointsArray[currentCityIndex - 1].coordinates); // **** !!!!! XXXXX
-    positionProperty.addSample(pEntityStartTime, randomPointsArray[currentCityIndex].coordinates);
-    console.log(pEntity);
+    const current_starting_coord_xyz = getCurrentStartingCoordXYZ();
+    
+    positionProperty.addSample(pEntityStartTime, current_starting_coord_xyz);
+    //console.log(pEntity); // ****
     //positionProperty.addSample(pEntityStartTime, pEntity.position);
     
-    //console.log("Path Point One: " + randomPointsArray[currentCityIndex].coordinates)
+    //console.log("Path Point One: " + current_starting_coord_xyz)
     nextTimeStep = pEntityStartTime;
     
     for(let i = 0; i < positionPathPointArray.length; i++) {
@@ -379,7 +434,7 @@ async function getNextPoint(originPoint) {
   let longitude = Cesium.Math.toDegrees(nextPointCartographic.longitude);
   let latitude = Cesium.Math.toDegrees(nextPointCartographic.latitude);
   // Create nextPoint
-  let nextPoint = Cesium.Cartesian3.fromDegrees(longitude, latitude, 300.0); // Note: Hard-coded altitude
+  let nextPoint = Cesium.Cartesian3.fromDegrees(longitude, latitude, DefaultFlyingAltitudeMeters); // Note: Hard-coded constant altitude
 
   // console.log("==============================================================");
   // console.log("Wind Speed: " + windSpeed);
@@ -391,14 +446,16 @@ async function getNextPoint(originPoint) {
   return nextPoint;
 }
 
-// Teleport to next location
-async function nextCity() {
-  console.log("nextCity()");
 
+// Teleport to next location
+async function teleportToCurrentCity()
+{
+  console.log("teleportToCurrentCity()");
+    
   if (viewer != null) {
-      // Get random points using city data
-      // ****
-      generateRandomPoints(city);
+      // Generate random point over the city
+      //generateRandomStartingPoint(new_city_info); // ****
+      
       // Reset position
       startTime = viewer.clock.currentTime;
       // Initialise nextTimeStep
@@ -409,75 +466,20 @@ async function nextCity() {
 
       // Create wind path for next city in the list. Spawn balloon on that location.
       // ****
-      await createPath(balloon, randomPointsArray[currentCityIndex].coordinates, numPoints, timeStepInSeconds);
-      //console.log(randomPointsArray[currentCityIndex].cityName);
+      const current_city_info = getCurrentCityInfo();
+      const current_starting_coord_xyz = getCurrentStartingCoordXYZ();
+      await createPath(balloon, current_starting_coord_xyz, numPoints, timeStepInSeconds);
+      //console.log(current_city_info.cityName);
       //reset clock
       viewer.clock.multiplier = 1;
       //viewer.clock.shouldAnimate = true;
   }
-    
-  // Increment city index
-  currentCityIndex++;
-  // Loop back if reached last city
-  if (currentCityIndex >= randomPointsArray.length) { // ****
-    currentCityIndex = 0;
-  }
-
-  // **** The above currentCityIndex update (more than likely) could more concisely be
-  // accomplished with the following:
-  //
-  // currentCityIndex = (currentCityIndex + 1) % randomPointsArray.length;
-    //
-    // Holding off for now on making the change, as there were a couple of bugs in the
-    // code that makes it a bit harder to be 100% confident.  One bug introduced an
-    // issue (> length rather then >= length), the other include a currentCityIndex-1
-    // calcualtion, which is also potentially erroneous, but counters the > length issue
 
   if (viewer != null) {
       removeAllEntitiesByName("Path Entity");
       setTimeout(createPathEntity, 5000);
 
       viewer.trackedEntity = balloon;
-  }
-}
-
-// Finds a location near a city's centre coordinate
-function getNearbyLocation(cityCartesianPoint){
-  console.log(`getNearbyLocation(${cityCartesianPoint})`);
-    
-  const EARTH_R = 6371 * Math.pow(10, 3);
-  const MAX_R = 10000; // 10000m 
-
-  let cityCartographicPoint = Cesium.Cartographic.fromCartesian(cityCartesianPoint);
-  let city_lon_deg = Cesium.Math.toDegrees(cityCartographicPoint.longitude);
-  let city_lat_deg = Cesium.Math.toDegrees(cityCartographicPoint.latitude);
-
-  let lonOffset = Math.floor(Math.random() - 0.5) * 0.03;
-  let latOffset = Math.floor(Math.random() - 0.5) * 0.03;
-
-  let ran_lon_deg = city_lon_deg + lonOffset;
-  let ran_lat_deg = city_lat_deg + latOffset;
-
-  let lat1 = city_lat_deg * (Math.PI / 180);
-  let lat2 = ran_lat_deg * (Math.PI / 180);
-  let lon1 = city_lon_deg;
-  let lon2 = ran_lon_deg;
-
-  let changeLat = (lat2 - lat1) * Math.PI / 180;
-  let changeLon = (lon2 - lon1) * Math.PI / 180;
-
-  let a = Math.sin(changeLat / 2) * Math.sin(changeLat / 2) +
-          Math.cos(lat1) * Math.cos(lat2) *
-          Math.sin(changeLon / 2) * Math.sin(changeLon / 2); 
-  let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  let distance = EARTH_R * c;
-
-  //console.log(distance);
-  if (distance < MAX_R && distance > 0){
-    return Cesium.Cartesian3.fromDegrees(ran_lon_deg, ran_lat_deg, 300);
-  } else {
-    console.log("Randomized nearby location out of bounds, returning null");
-    return null;
   }
 }
 
@@ -551,17 +553,16 @@ if (viewer != null) {
     document.head.appendChild(style);
 }
 
-//Create pathEntityentity
+//Create Path Entity
 async function createPathEntity() {
-  console.log("createPathEntity()");
+  //console.log("createPathEntity()");
 
-  console.log("**** createPathEntity(): currentCityIndex = " + currentCityIndex)
-  console.log(JSON.stringify(randomPointsArray))
-
-  const currentCityCoords = randomPointsArray[currentCityIndex].coordinates
-  console.log("currentCityCoords = " + JSON.stringify(currentCityCoords));
+  console.log(`**** createPathEntity(): [currentCityIndexPos = ${JourneyItinerary.currentCityIndexPos}]`);
+  console.log("randomStartingPoints: " + JSON.stringify(JourneyItinerary.startingCityPointsArray))
 
 
+  const current_city_starting_coord_xyz = getCurrentStartingCoordXYZ();
+  
     // Define key dimensions of array, in metres
     const arrowBodyLength = 20.0; 
     const arrowBodyWidth  =  6.0;  
@@ -580,9 +581,9 @@ async function createPathEntity() {
   ];
 
   for (let arrowPosition of arrowPositions) {
-	arrowPosition.x += currentCityCoords.x;
-	arrowPosition.y += currentCityCoords.y;
-	arrowPosition.z += currentCityCoords.z;
+	arrowPosition.x += current_city_starting_coord_xyz.x;
+	arrowPosition.y += current_city_starting_coord_xyz.y;
+	arrowPosition.z += current_city_starting_coord_xyz.z;
   }
 
     
@@ -597,11 +598,7 @@ async function createPathEntity() {
       }),
     ]),
 
-    // Use the same starting position as the target entity
-    //position: randomPointsArray[currentCityIndex], // Change this to random position on map
-    // ****
-    //position: randomPointsArray[currentCityIndex].coordinates, // Change this to random position on map
-    position: currentCityCoords,
+    position: current_city_starting_coord_xyz,
       
     box : {
       dimensions : new Cesium.Cartesian3(20, 6, 1),
@@ -732,8 +729,11 @@ if (viewer != null) {
     // viewer.trackedEntity = balloon;
 }
 
+
 // Generate path for the balloon
-nextCityButton.addEventListener('click', nextCity);
+const nextCityButton = document.getElementById("next-city");
+nextCityButton.addEventListener('click', teleportToCurrentCity);
+
 
 /*********************************
  * TIMER
@@ -771,7 +771,7 @@ function startTimer(duration) {
       // Reset duration
       timer = duration;
       // Call nextCity
-      //nextCity();
+      //teleportToCurrentCity();
     }
   }, 1000);
 }
@@ -807,7 +807,9 @@ if (viewer != null) {
 	});
 }
 
+//
 // Connect to WebSocket Server
+//
 
 const ws_socket_url = `${SERVER_URL}`
 console.log(`Creating connection to Web-Socket server: ${ws_socket_url}`)
@@ -820,10 +822,12 @@ window.joinRoom = function(room){
 
 socket.on("city_data", (data) => {
     console.log("socket.on('city_data') data:", data)
-  // ********** We need to convert data.coordinates into something cesium can understand **************
-  var newCoords = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]);
-  let temp = { cityName: data.city, coordinates: newCoords };
-  city = temp;
-  console.log(city.cityName);
-  nextCity();
+
+    const city_name = data.city;    
+    const city_coord_xyz = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]); // convert (lat,long,height) into coord (x,y,z)
+   
+    const city_info = { cityName: city_name, coord_xyz: city_coord_xyz };
+    
+    appendCity(city_info);    
+    teleportToCurrentCity();
 });
