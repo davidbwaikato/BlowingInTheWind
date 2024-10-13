@@ -8,20 +8,43 @@ Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 
 const SERVER_URL  = config.SERVER_URL
 
-const DefaultStartingPosition = {
-    // University of Waikato (Hamilton campus):
-    'lat'   : -37.7884167,
-    'long'  : 175.3175556,
-    'height': 100.0
+
+/*********************************
+ * Connect to WebSocket Server
+ *********************************/
+
+const ws_socket_url = `${SERVER_URL}`
+console.log(`Creating connection to Web-Socket server: ${ws_socket_url}`)
+
+const socket = io(ws_socket_url);
+
+window.joinRoom = function(room){
+  socket.emit("join_room", room);
 }
+
+socket.on("city_data", (data) => {
+    console.log("socket.on('city_data') data:", data)
+
+    const city_name = data.city;    
+    const city_coord_xyz = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]); // convert (lat,long,height) into coord (x,y,z)
+   
+    const city_info = { cityName: city_name, coord_xyz: city_coord_xyz };
+    
+    appendCity(city_info);    
+    teleportToCurrentCity();
+});
+
+
+/*********************************
+ * Cesium/Ballon Setup
+ *********************************/
+
+// Initialise Cesium Viewer
+
 
 const DefaultFlyingAltitudeMeters = 300.0; // meters
 const DefaultPitchAngleRad        = Cesium.Math.toRadians(-15.0);
 
-/*********************************
- * SETUP
- *********************************/
-// Initialise viewer
 let viewer = null;
 try {
     viewer = new Cesium.Viewer("cesiumContainer", {
@@ -42,19 +65,20 @@ if (viewer != null) {
     viewer.scene.screenSpaceCameraController.enableZoom = false;
 }
 
-var balloon = null;
+var BalloonSurrogateEntity = null;
 
 //viewer.scene.debugShowFramesPerSecond = true;
 
 /*********************************
  * VISUALISE BUILDINGS
  *********************************/
+let BuildingTileSet = null;
 if (viewer != null) {
     // Google Map's Photorealistic 3d Tileset
     try {
 	console.log("Loading on GooglePhotorealistic3DTileset");
-	const buildingTileSet = await Cesium.createGooglePhotorealistic3DTileset();
-	viewer.scene.primitives.add(buildingTileSet);
+	BuildingTileSet = await Cesium.createGooglePhotorealistic3DTileset();
+	//viewer.scene.primitives.add(BuildingTileSet);
     }
     catch (error) {
 	console.log(`Failed to load tileset: ${error}`);
@@ -84,7 +108,7 @@ var JourneyItinerary = {
 function appendCity(new_city_info)
 {
     console.log("appendCity(new_city_info)");
-    console.log("  adding: " + new_city_info);
+    console.log("  adding: ",  new_city_info);
 
     JourneyItinerary.cityInfoArray.push(new_city_info);
     generateRandomStartingPoint(new_city_info);
@@ -453,9 +477,6 @@ async function teleportToCurrentCity()
   console.log("teleportToCurrentCity()");
     
   if (viewer != null) {
-      // Generate random point over the city
-      //generateRandomStartingPoint(new_city_info); // ****
-      
       // Reset position
       startTime = viewer.clock.currentTime;
       // Initialise nextTimeStep
@@ -468,7 +489,7 @@ async function teleportToCurrentCity()
       // ****
       const current_city_info = getCurrentCityInfo();
       const current_starting_coord_xyz = getCurrentStartingCoordXYZ();
-      await createPath(balloon, current_starting_coord_xyz, numPoints, timeStepInSeconds);
+      await createPath(BalloonSurrogateEntity, current_starting_coord_xyz, numPoints, timeStepInSeconds);
       //console.log(current_city_info.cityName);
       //reset clock
       viewer.clock.multiplier = 1;
@@ -479,7 +500,7 @@ async function teleportToCurrentCity()
       removeAllEntitiesByName("Path Entity");
       setTimeout(createPathEntity, 5000);
 
-      viewer.trackedEntity = balloon;
+      viewer.trackedEntity = BalloonSurrogateEntity;
   }
 }
 
@@ -488,35 +509,53 @@ async function teleportToCurrentCity()
  *********************************/
 
 if (viewer != null) {
-    // Create (surrogate) balloon entity
+    // Retrieve default starting position from server, and dreate (surrogate) balloon entity at that position
 
-    balloon = viewer.entities.add({
-	name: "The hot air balloon",
-	// Move entity via simulation time
-	availability: new Cesium.TimeIntervalCollection([
-	    new Cesium.TimeInterval({
-		start: startTime,
-		stop: startTime
-	    }),
-	]),
-	// Use path created by the function
-	//position: Cesium.Cartesian3.fromDegrees(175.3177, -37.78765, 300.0),
-	position: Cesium.Cartesian3.fromDegrees(DefaultStartingPosition.long,DefaultStartingPosition.lat,DefaultStartingPosition.height),
-	// Placeholder entity visuals
-	ellipsoid: {
-	    radii: new Cesium.Cartesian3(52.0, 52.0, 52.0),
-	    material: Cesium.Color.RED.withAlpha(0),
-	},
-	// Show path of hot air balloon
-	path: {
-	    resolution: 1,
-	    // material: new Cesium.PolylineGlowMaterialProperty({
-	    //   glowPower: 0.1,
+    socket.emit('get_starting_location', (response_data) => {
+
+	const default_long = response_data.coordinates[0];
+	const default_lat  = response_data.coordinates[1];
+	const default_alt  = response_data.coordinates[2];
+	
+	BalloonSurrogateEntity = viewer.entities.add({
+	    name: "The (surrogate) hot air balloon",
+	    // Move entity via simulation time
+	    availability: new Cesium.TimeIntervalCollection([
+		new Cesium.TimeInterval({
+		    start: startTime,
+		    stop: startTime
+		}),
+	    ]),
+	    // Use path created by the function
+	    //position: Cesium.Cartesian3.fromDegrees(DefaultStartingPosition.long,DefaultStartingPosition.lat,DefaultStartingPosition.height), // ****
+	    position: Cesium.Cartesian3.fromDegrees(default_long,default_lat,default_alt),
+	    // Placeholder entity visuals
+	    ellipsoid: {
+		radii: new Cesium.Cartesian3(52.0, 52.0, 52.0),
+		material: Cesium.Color.RED.withAlpha(0),
+	    },
+	    // Show path of hot air balloon
+	    path: {
+		resolution: 1,
+		// material: new Cesium.PolylineGlowMaterialProperty({
+		//   glowPower: 0.1,
 	    //   color: Cesium.Color.YELLOW,
-	    // }),
+		// }),
 	    width: .1,
-	},
-    });
+	    },
+	});
+	
+	// Deliberately wait for 3 seconds, with Cesium showing its initial world view, before
+	// changing to the default location provided by the BITW server
+	setTimeout(function() {
+	    // Quick camera focus to entity 
+	    viewer.zoomTo(BalloonSurrogateEntity, cameraOffset);
+	    viewer.scene.primitives.add(BuildingTileSet);
+	    
+	    // Or set tracked entity for instant zoom
+	    // viewer.trackedEntity = BalloonSurrogateEntity;
+	},3000);    	
+    });    
 }
 
 let compass = null;
@@ -642,8 +681,6 @@ async function createPathEntity() {
 
 
 
-
-
 //createPathEntity();
 function generateAnimatedPath(){
   //console.log("generate method called");
@@ -722,17 +759,13 @@ let numPoints = 5;
 // Time it takes to go to destination
 let timeStepInSeconds = minute * 30;
 
-if (viewer != null) {
-    // Quick camera focus to target entity
-    viewer.zoomTo(balloon, cameraOffset);
-    // Or set tracked entity for instant zoom
-    // viewer.trackedEntity = balloon;
-}
 
-
+// Following feature nolonger used
+/*
 // Generate path for the balloon
 const nextCityButton = document.getElementById("next-city");
 nextCityButton.addEventListener('click', teleportToCurrentCity);
+*/
 
 
 /*********************************
@@ -788,11 +821,11 @@ if (viewer != null) {
 	// If clock is playing
 	if(clock.shouldAnimate) {
 	    // Change camera angle to 3rd person view (chase cam, no camera controls)
-	    //getModelMatrix(balloon, viewer.clock.currentTime, scratch);
+	    //getModelMatrix(BalloonSurrogateEntity, viewer.clock.currentTime, scratch);
 	    //cam.lookAtTransform(scratch, new Cesium.Cartesian3(-250, 0, 70));
-	    
+	   
 	    // Track balloon (with camera controls)
-	    viewer.trackedEntity = balloon;
+	    viewer.trackedEntity = BalloonSurrogateEntity;	    
 	}
     });
 
@@ -802,32 +835,9 @@ if (viewer != null) {
 	    // If paused
 	    if (!value) {
 		// Revert camera back to normal
-		viewer.zoomTo(balloon, cameraOffset);
+		viewer.zoomTo(BalloonSurrogateEntity, cameraOffset);
 	    }
 	});
 }
 
-//
-// Connect to WebSocket Server
-//
 
-const ws_socket_url = `${SERVER_URL}`
-console.log(`Creating connection to Web-Socket server: ${ws_socket_url}`)
-
-const socket = io(ws_socket_url);
-
-window.joinRoom = function(room){
-  socket.emit("join_room", room);
-}
-
-socket.on("city_data", (data) => {
-    console.log("socket.on('city_data') data:", data)
-
-    const city_name = data.city;    
-    const city_coord_xyz = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]); // convert (lat,long,height) into coord (x,y,z)
-   
-    const city_info = { cityName: city_name, coord_xyz: city_coord_xyz };
-    
-    appendCity(city_info);    
-    teleportToCurrentCity();
-});
