@@ -14,7 +14,7 @@ function App() {
     if (username !== "" && room !== "") {
         //console.log("Supressing App.js inlined socket.emit('join_room',room) in favour of window.joinRoom()");
 	socket.emit("join_room", room);
-	//console.log("**** Away to call window.joinRoom().  This seems to duplicate the socket.emit('join_room') call");
+	console.log("**** Away to call window.joinRoom().  This seems to duplicate the socket.emit('join_room') call");
 	window.joinRoom(room);
 	setShowChat(true);
     }

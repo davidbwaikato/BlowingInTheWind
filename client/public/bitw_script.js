@@ -6,12 +6,12 @@ import { fetchWeatherData } from "./weather.js";
 // Set access token
 Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 
-const SERVER_URL  = config.SERVER_URL
-
-
 /*********************************
- * Connect to WebSocket Server
+ * Get connect to WebSocket Server
  *********************************/
+//import socket from './SocketInstance.js';
+
+const SERVER_URL  = config.SERVER_URL
 
 const ws_socket_url = `${SERVER_URL}`
 console.log(`Creating connection to Web-Socket server: ${ws_socket_url}`)
@@ -21,6 +21,7 @@ const socket = io(ws_socket_url);
 window.joinRoom = function(room){
   socket.emit("join_room", room);
 }
+
 
 socket.on("city_data", (data) => {
     console.log("socket.on('city_data') data:", data)
@@ -65,7 +66,7 @@ if (viewer != null) {
     viewer.scene.screenSpaceCameraController.enableZoom = false;
 }
 
-var BalloonSurrogateEntity = null;
+let BalloonSurrogateEntity = null;
 
 //viewer.scene.debugShowFramesPerSecond = true;
 
@@ -99,7 +100,19 @@ function cartesianToDegrees(cartesian) {
   return {longitude, latitude};
 }
 
-var JourneyItinerary = {
+//gets the wind data and stores it to the module level variables 
+async function fetchAndStoreWind(latitude, longitude){
+  const weatherWind=  await fetchWeatherData(latitude, longitude);
+  windDirection = weatherWind.windDirection;
+  windSpeed = weatherWind.windSpeed;
+}
+
+
+/*********************************
+ * Location (e.g. city) based utility functions
+ *********************************/
+
+let JourneyItinerary = {
     cityInfoArray:           [],
     startingCityPointsArray: [],
     currentCityIndexPos:     -1,
@@ -113,8 +126,7 @@ function appendCity(new_city_info)
     JourneyItinerary.cityInfoArray.push(new_city_info);
     generateRandomStartingPoint(new_city_info);
     
-    JourneyItinerary.currentCityIndexPos++;
-    
+    JourneyItinerary.currentCityIndexPos++;    
 }
 
 function getCurrentCityInfo()
@@ -140,7 +152,8 @@ function getCurrentStartingCoordXYZ()
 }
 
 // Finds a location near a city's centre coordinate
-function getNearbyLocation(cityCartesianPoint){
+function getNearbyLocation(cityCartesianPoint)
+{
   console.log(`getNearbyLocation(${cityCartesianPoint})`);
     
   const EARTH_R = 6371 * Math.pow(10, 3);
@@ -179,7 +192,6 @@ function getNearbyLocation(cityCartesianPoint){
   }
 }
 
-
 function generateRandomStartingPoint(newCity)
 {
   console.log("generateRandomStartingPoint()");
@@ -213,18 +225,19 @@ function generateRandomStartingPoint(newCity)
   }
 }
 
-//gets the wind data and stores it to the module level variables 
-async function fetchAndStoreWind(latitude, longitude){
-  const weatherWind=  await fetchWeatherData(latitude, longitude);
-  windDirection = weatherWind.windDirection;
-  windSpeed = weatherWind.windSpeed;
-}
-
 /*********************************
  * PATHING
  *********************************/
 // One minute
 const minute = 60;
+
+// How many points to put on the map
+const NumPathPoints = 5;
+
+// Set up clock
+// => Time it takes to go to destination
+const TimeStepInSeconds = minute * 30;
+
 
 /* INITIAL VALUES ON LOAD */
 let startTime;
@@ -264,7 +277,7 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
   //Reset array
   positionPathPointArray = [];
   // Storage for last point on map where wind data was obtained from
-  var lastPointOnMap = startPos;
+  let lastPointOnMap = startPos;
   // Calculate timeStep
   let timeStep = minute * timeToNextPoint;
   // Set new stopping point
@@ -279,9 +292,9 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
   positionProperty.addSample(startTime, lastPointOnMap); // We might need to remove this eventually as this might bug out if 2 points are on the exact same coordinates
 
   // Plot points on the map
-  for (let i = 0; i < numPoints; i++) {  
+  for (let i = 0; i < NumPathPoints; i++) {  
     // Calculate timestep
-    const time = Cesium.JulianDate.addSeconds(nextTimeStep, timeStepInSeconds, new Cesium.JulianDate());
+    const time = Cesium.JulianDate.addSeconds(nextTimeStep, TimeStepInSeconds, new Cesium.JulianDate());
     // Get wind data from last point to get the next point to plot
     const thisPoint = await getNextPoint(lastPointOnMap);
     // Change lastPoint to this current one
@@ -351,8 +364,8 @@ async function animatePath(pEntity) {
     nextTimeStep = pEntityStartTime;
     
     for(let i = 0; i < positionPathPointArray.length; i++) {
-      const time = Cesium.JulianDate.addSeconds(nextTimeStep, timeStepInSeconds * pathSpeed, new Cesium.JulianDate());
-      var thisPoint = positionPathPointArray[i];
+      const time = Cesium.JulianDate.addSeconds(nextTimeStep, TimeStepInSeconds * pathSpeed, new Cesium.JulianDate());
+      const thisPoint = positionPathPointArray[i];
 
       //console.log("Entity position" + i + ": ");
       //console.log(thisPoint);
@@ -446,7 +459,7 @@ async function getNextPoint(originPoint) {
   // Convert wind direction to radians
   let windDirRad = Cesium.Math.toRadians(windDirection);
   // Calculate magnitude (distance)
-  let magnitude = windSpeed * timeStepInSeconds; // m/min
+  let magnitude = windSpeed * TimeStepInSeconds; // m/min
   // Calculate x and y coordinates
   let nextX = originPoint.x + Math.cos(windDirRad) * magnitude;
   let nextY = originPoint.y + Math.sin(windDirRad) * magnitude;
@@ -489,7 +502,7 @@ async function teleportToCurrentCity()
       // ****
       const current_city_info = getCurrentCityInfo();
       const current_starting_coord_xyz = getCurrentStartingCoordXYZ();
-      await createPath(BalloonSurrogateEntity, current_starting_coord_xyz, numPoints, timeStepInSeconds);
+      await createPath(BalloonSurrogateEntity, current_starting_coord_xyz, NumPathPoints, TimeStepInSeconds);
       //console.log(current_city_info.cityName);
       //reset clock
       viewer.clock.multiplier = 1;
@@ -545,7 +558,7 @@ if (viewer != null) {
 	    },
 	});
 	
-	// Deliberately wait for 3 seconds, with Cesium showing its initial world view, before
+	// Deliberately wait for 4 seconds, with Cesium showing its initial world view, before
 	// changing to the default location provided by the BITW server
 	setTimeout(function() {
 	    // Quick camera focus to entity 
@@ -554,43 +567,10 @@ if (viewer != null) {
 	    
 	    // Or set tracked entity for instant zoom
 	    // viewer.trackedEntity = BalloonSurrogateEntity;
-	},3000);    	
+	},4000);    	
     });    
 }
 
-let compass = null;
-
-if (viewer != null) {
-    // Create a compass element
-    compass = document.createElement('div');
-    compass.className = 'cesium-compass';
-    viewer.container.appendChild(compass);
-    //set to north
-    compass.style.transform = 360 - Cesium.Math.toDegrees( viewer.camera.heading );
-
-    // Update compass orientation when camera changes
-    viewer.scene.postRender.addEventListener(function() {
-	var camera = viewer.camera;
-	var heading = Cesium.Math.toDegrees(camera.heading).toFixed(1);
-	compass.style.transform = 'rotate(' + (-heading) + 'deg)';
-    });
-
-
-    // CSS styles for the compass
-    var style = document.createElement('style');
-    style.textContent = `
-      .cesium-compass {
-        position: absolute;
-        bottom: 40px;
-        right: 40px;
-        width: 100px;
-        height: 100px;
-        background-image: url('compass.png'); /* Image for the compass needle */
-        background-size: contain;
-        transition: transform 0.5s;
-    }`;
-    document.head.appendChild(style);
-}
 
 //Create Path Entity
 async function createPathEntity() {
@@ -633,7 +613,7 @@ async function createPathEntity() {
     availability: new Cesium.TimeIntervalCollection([
       new Cesium.TimeInterval({
         start: viewer.clock.currentTime,
-        stop: Cesium.JulianDate.addSeconds(viewer.clock.currentTime, timeStepInSeconds * numPoints, new Cesium.JulianDate()),
+        stop: Cesium.JulianDate.addSeconds(viewer.clock.currentTime, TimeStepInSeconds * NumPathPoints, new Cesium.JulianDate()),
       }),
     ]),
 
@@ -692,7 +672,8 @@ function generateAnimatedPath(){
 //first path entity - called only once
 //NOTE: if clock is started as soon as program is loaded this entity gets removed
 //  wait a few seconds for game to load or increase the setTimeout time
-console.warn("Warning: **** Supressing setTimeout(createPathEntity,4000), as there are no valid city co-ords when called at this point ")
+// ****
+//console.warn("Warning: **** Supressing setTimeout(createPathEntity,4000), as there are no valid city co-ords when called at this point ")
 //setTimeout(createPathEntity, 4000);
 
 // Set up the onTick event listener
@@ -734,17 +715,17 @@ function removeAllEntitiesByName(entityName) {
 }
 
 //Set up chase camera
-var matrix3Scratch = new Cesium.Matrix3();
-var positionScratch = new Cesium.Cartesian3();
-var orientationScratch = new Cesium.Quaternion();
-var scratch = new Cesium.Matrix4();
+let matrix3Scratch = new Cesium.Matrix3();
+let positionScratch = new Cesium.Cartesian3();
+let orientationScratch = new Cesium.Quaternion();
+let scratch = new Cesium.Matrix4();
 
 function getModelMatrix(balloon, time, result) {
-  var position = Cesium.Property.getValueOrUndefined(balloon.position, time, positionScratch);
+  let position = Cesium.Property.getValueOrUndefined(balloon.position, time, positionScratch);
   if (!Cesium.defined(position)) {
     return undefined;
   }
-  var orientation = Cesium.Property.getValueOrUndefined(balloon.orientation, time, orientationScratch);
+ let orientation = Cesium.Property.getValueOrUndefined(balloon.orientation, time, orientationScratch);
   if (!Cesium.defined(orientation)) {
     result = Cesium.Transforms.eastNorthUpToFixedFrame(position, undefined, result);
   } else {
@@ -752,13 +733,6 @@ function getModelMatrix(balloon, time, result) {
   }
   return result;
 }
-
-// How many points to put on the map
-let numPoints = 5;
-// Set up clock
-// Time it takes to go to destination
-let timeStepInSeconds = minute * 30;
-
 
 // Following feature nolonger used
 /*
@@ -768,6 +742,46 @@ nextCityButton.addEventListener('click', teleportToCurrentCity);
 */
 
 
+
+/*********************************
+ * COMPASS Widget (<div>)
+ *********************************/
+
+let compass = null;
+
+if (viewer != null) {
+    // Create a compass element
+    compass = document.createElement('div');
+    compass.className = 'cesium-compass';
+    viewer.container.appendChild(compass);
+    //set to north
+    compass.style.transform = 360 - Cesium.Math.toDegrees( viewer.camera.heading );
+
+    // Update compass orientation when camera changes
+    viewer.scene.postRender.addEventListener(function() {
+	const camera = viewer.camera;
+	const heading = Cesium.Math.toDegrees(camera.heading).toFixed(1);
+	compass.style.transform = 'rotate(' + (-heading) + 'deg)';
+    });
+
+
+    // CSS styles for the compass
+    let style = document.createElement('style');
+    style.textContent = `
+      .cesium-compass {
+        position: absolute;
+        bottom: 40px;
+        right: 40px;
+        width: 100px;
+        height: 100px;
+        background-image: url('compass.png'); /* Image for the compass needle */
+        background-size: contain;
+        transition: transform 0.5s;
+    }`;
+    document.head.appendChild(style);
+}
+
+
 /*********************************
  * TIMER
  *********************************/
@@ -775,7 +789,7 @@ let minutesText = document.getElementById("minutes");
 let secondsText = document.getElementById("seconds");
 
 function startTimer(duration) {
-  var timer = duration, minutes, seconds;
+  let timer = duration, minutes, seconds;
 
   setInterval(function () {
     // Calculate time to display
@@ -813,8 +827,9 @@ function startTimer(duration) {
 //startTimer(60 * 1);
 
 /*********************************
- * RUNTIME CODE
+ * Runtime Code: Callback/Listeners
  *********************************/
+
 if (viewer != null) {
     // Tick function
     viewer.clock.onTick.addEventListener(function(clock) {
@@ -841,3 +856,13 @@ if (viewer != null) {
 }
 
 
+// https://stackoverflow.com/questions/979975/get-the-values-from-the-get-parameters-javascript
+function joinRoomShortcut()
+{
+    const join_name = window.location.searchParams.get("name");
+    const join_room = window.location.searchParams.get("room");
+
+    if ((join_name && join_name.match(/[^\s]/)) && (join_room && join_room.match(/[^\s]/))) {
+	console.log(`Add code here for joining ${join_name} to room ${join_room}`);	
+    }   
+}

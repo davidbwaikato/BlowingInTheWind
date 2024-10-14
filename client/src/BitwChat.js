@@ -1,21 +1,33 @@
-import React, {useEffect, useState } from 'react'
+import React, {useEffect, useState, useCallback } from 'react'
 import ScrollToBottom from 'react-scroll-to-bottom';
 
+import config from "./config.js";
+
+const SERVER_URL = config.SERVER_URL || "http://localhost:3001";
+
 function BitwChat({socket, username, room}) {
+    
     const [currentMessage, setCurrentMessage] = useState("");
     const [messageList, setMessageList] = useState([]);
     const [scoreList, setScoreList] = useState([]);
 
     const [playAudioBackground, setPlayAudioBackground] = useState(true);
     const [playAudioMusic,      setPlayAudioMusic] = useState(true);
-    
+
     const sendMessage = async () =>{
         if(currentMessage !== "" ){
+	    const date_now = new Date();
+	    const hours = date_now.getHours();
+	    const mins  = date_now.getMinutes();
+	    
+	    const time_str = hours + ":" + String(mins).padStart(2,"0");
+	    
             const messageData = {
                 room: room,
                 author: username,
                 message: currentMessage,
-                time: new Date(Date.now()).getHours() + ":" + new Date(Date.now()).getMinutes(),
+                //time: new Date(Date.now()).getHours() + ":" + new Date(Date.now()).getMinutes(),
+		time: time_str
 
             };
             
@@ -34,7 +46,108 @@ function BitwChat({socket, username, room}) {
         }
     };
 
- //calls functions whenever there is a change either by you or other people on the socket 
+    const getTrackInfo = (mp3_track_url) => {
+	const mp3_track_url_tail = mp3_track_url.substring(mp3_track_url.lastIndexOf('/')+1)	
+	const track_name_raw = decodeURI(mp3_track_url_tail);
+	const track_name = track_name_raw.replace(/\.mp3$/i,"").replace(/\s*(\(|\[).*$/,"");
+
+	let track_info = { 'track': track_name };
+
+	if (track_name.lastIndexOf('-')>0) {
+	    const track_breakdown = track_name.split(/\s*-\s*/);
+
+	    const artist = track_breakdown[0];
+	    const song   = track_breakdown[1];
+	    track_info.artist = artist;
+	    track_info.song = song;
+	    
+	}
+	
+	/*
+	const track_breakdown = track_name.match(/^\s*(.+)+\s*-\s*(.+)\s*$/)
+
+	if (track_breakdown) {
+	    const artist = track_breakdown[1];
+	    const song   = track_breakdown[2];
+	    track_info.artist = artist;
+	    track_info.song = song;
+	}
+	*/
+	return track_info;
+    }
+    
+		    
+    const startPlaylist = useCallback((json_data,audio_elem,max_vol) => {
+
+	const audio_crossfade_in_thresh_perc  = 0.05;
+	const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
+	const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
+	
+	const crossfade_audio = (audio_elem, max_vol) => {
+	    
+	    const duration = audio_elem.duration;
+	    const current_time = audio_elem.currentTime;
+	    const progress = current_time / duration;
+	    
+	    if (progress <= audio_crossfade_in_thresh_perc) {
+		const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
+		audio_elem.volume = max_vol * crossfade_vol;
+	    }
+	    else if (progress >= audio_crossfade_out_thresh_perc) {
+		const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
+		audio_elem.volume = max_vol * crossfade_vol;
+	    }
+	};
+	
+	let playlist_info = {
+	    server_url  : SERVER_URL,
+	    prefix_path : json_data['url-path-prefix'],
+	};
+	
+	let mp3_filelist = json_data['mp3-filelist']
+	
+	let playlist = []
+	
+	for (const mp3_file of mp3_filelist) {
+	    const mp3_url = playlist_info.server_url + playlist_info.prefix_path + "/" + mp3_file;
+	    const track_info = getTrackInfo(mp3_url);
+	    
+	    const playlist_item = { url: mp3_url, track_info: track_info }
+	    playlist.push(playlist_item);			
+	}
+	
+	console.log("Setup music playlist");
+	playlist_info.playlist = playlist;
+	//console.log("Playlist info: ", JSON.stringify(playlist_info));
+	
+	if (playlist.length > 0) {
+	    audio_elem.addEventListener("loadeddata", () => {
+		audio_elem.play();
+	    });
+	    
+	    audio_elem.addEventListener("timeupdate", function() {
+		crossfade_audio(audio_elem,max_vol);
+	    });
+
+	    let playlist_pos = 0;
+	    audio_elem.addEventListener("ended", function() {
+		console.log("Audio ended");
+		playlist_pos = (playlist_pos + 1) % playlist.length;
+		const mp3_url = playlist[playlist_pos].url;
+		console.log("Selecting next track: ", playlist[playlist_pos].track_info)
+		audio_elem.src = mp3_url;
+		// Add track as tooltip on play/mute button
+	    });
+
+	    // Start the first track playing
+	    const mp3_url = playlist[0].url;
+	    console.log("Selected track: ", playlist[0].track_info)
+	    audio_elem.src = mp3_url;
+	    // Add track tooltip on play/mute button
+	}
+    }, []);
+    
+    //calls functions whenever there is a change either by you or other people on the socket 
     useEffect(() => {
         socket.on("receive_message", (data) => {
         //displays previous list of messages and the new message           
@@ -65,43 +178,48 @@ function BitwChat({socket, username, room}) {
     // audio-background and audio-music    
 
     useEffect(() => {
-
-	const audio_crossfade_in_thresh_perc  = 0.05;
-	const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
-	const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
 	
-	const crossfade_audio = (audio_elem) => {
-	    //console.log("timeudpate");
-	    //console.log(audio_elem);
-	    
-	    const duration = audio_elem.duration;
-	    const current_time = audio_elem.currentTime;
-	    const progress = current_time / duration;
-	    //console.log("Progress = " + progress);
-	    
-	    if (progress <= audio_crossfade_in_thresh_perc) {
-		const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
-		//console.log("Fading in: vol = " + crossfade_vol);
-		audio_elem.volume = crossfade_vol;
-	    }
-	    else if (progress >= audio_crossfade_out_thresh_perc) {
-		const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
-		//console.log("Fading out: vol = " + crossfade_vol);
-		audio_elem.volume = crossfade_vol;
-	    }
-	};
-		
-	
-	console.log('Init Background Audio');
+	console.log('Initialising ambient background audio');
 	const audio_background = document.getElementById('audio-background');
 	audio_background.volume = 0.0;
-		
+
+	/*
 	audio_background.addEventListener("timeupdate", function() {
-	    crossfade_audio(audio_background);
+	    crossfade_audio(audio_background,1.0);
 	});
 
 	audio_background.play();
-    }, []); // Empty array ensures it runs only once
+	*/
+
+	fetch(SERVER_URL+'/get-audio-background-playlist')
+	    .then((res) => {
+		return res.json();
+	    })
+	    .then((json_data) => {
+		if (json_data['status'] === "ok") {
+		    startPlaylist(json_data,audio_background,1.0);
+		}
+	    });
+	
+	console.log('Initialising music playlist');
+	const audio_music = document.getElementById('audio-music');	
+	audio_music.volume = 0.0;
+		
+
+	// Fetch playlist
+	// Note: this may return no songs, if none have been added to the server
+	
+	fetch(SERVER_URL+'/get-audio-music-playlist')
+	    .then((res) => {
+		return res.json();
+	    })
+	    .then((json_data) => {
+		if (json_data['status'] === "ok") {
+		    startPlaylist(json_data,audio_music,0.3);
+		}
+	    });
+
+    }, [startPlaylist]); // Empty array ensures it runs only once
     
     const togglePlayAudioBackground = () => {
 	const audio = document.getElementById('audio-background');
@@ -120,16 +238,16 @@ function BitwChat({socket, username, room}) {
     };
     
     const togglePlayAudioMusic = () => {
-	const audio = document.getElementById('audio-music');
+	const audio_music = document.getElementById('audio-music');
 	const toggle_play_icon = document.getElementById('play-audio-music');
 
 	if (playAudioMusic) {
-	    audio.muted = true;
+	    audio_music.muted = true;
 	    toggle_play_icon.src = "icons/audio-music-off.svg";
 	    setPlayAudioMusic(false);
 	}
 	else {
-	    audio.muted = false;
+	    audio_music.muted = false;
 	    toggle_play_icon.src = "icons/audio-music-on.svg";
 	    setPlayAudioMusic(true);
 	}	
