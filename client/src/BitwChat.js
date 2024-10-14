@@ -83,19 +83,19 @@ function BitwChat({socket, username, room}) {
 	const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
 	const audio_crossfade_out_delta = 1.0 - audio_crossfade_out_thresh_perc;
 	
-	const crossfade_audio = (audio_elem, max_vol) => {
+	const crossfade_audio = (cf_audio_elem, max_vol) => {
 	    
-	    const duration = audio_elem.duration;
-	    const current_time = audio_elem.currentTime;
+	    const duration = cf_audio_elem.duration;
+	    const current_time = cf_audio_elem.currentTime;
 	    const progress = current_time / duration;
 	    
 	    if (progress <= audio_crossfade_in_thresh_perc) {
 		const crossfade_vol = progress/audio_crossfade_in_thresh_perc;
-		audio_elem.volume = max_vol * crossfade_vol;
+		cf_audio_elem.volume = max_vol * crossfade_vol;
 	    }
 	    else if (progress >= audio_crossfade_out_thresh_perc) {
 		const crossfade_vol = 1.0 - (progress - audio_crossfade_out_thresh_perc)/audio_crossfade_out_delta;
-		audio_elem.volume = max_vol * crossfade_vol;
+		cf_audio_elem.volume = max_vol * crossfade_vol;
 	    }
 	};
 	
