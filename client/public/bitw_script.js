@@ -11,29 +11,39 @@ Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
  *********************************/
 //import socket from './SocketInstance.js';
 
+/*
 const SERVER_URL  = config.SERVER_URL
 
 const ws_socket_url = `${SERVER_URL}`
 console.log(`Creating connection to Web-Socket server: ${ws_socket_url}`)
 
 const socket = io(ws_socket_url);
+console.log("**** bitw_scripts.js global init time, bitw_socket = ", window.bitw_socket);
+*/
 
-window.joinRoom = function(room){
-  socket.emit("join_room", room);
+//const socket = window.bitw_socket;
+//console.log("**** bitw_scripts.js socket = ", socket);
+
+window.bitws_registerSocketOn = function(socket) {
+    /*
+    window.joinRoom = function(room){
+	//console.log("**** window.joinRoom() bitw_socket = ", window.bitw_socket);
+	socket.emit("join_room", room);
+    }
+*/
+
+    socket.on("city_data", (data) => {
+	console.log("socket.on('city_data') data:", data)
+	
+	const city_name = data.city;    
+	const city_coord_xyz = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]); // convert (lat,long,height) into coord (x,y,z)
+	
+	const city_info = { cityName: city_name, coord_xyz: city_coord_xyz };
+	
+	appendCity(city_info);    
+	teleportToCurrentCity();
+    });
 }
-
-
-socket.on("city_data", (data) => {
-    console.log("socket.on('city_data') data:", data)
-
-    const city_name = data.city;    
-    const city_coord_xyz = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]); // convert (lat,long,height) into coord (x,y,z)
-   
-    const city_info = { cityName: city_name, coord_xyz: city_coord_xyz };
-    
-    appendCity(city_info);    
-    teleportToCurrentCity();
-});
 
 
 /*********************************
@@ -45,14 +55,92 @@ socket.on("city_data", (data) => {
 
 const DefaultFlyingAltitudeMeters = 300.0; // meters
 const DefaultPitchAngleRad        = Cesium.Math.toRadians(-15.0);
+const cameraOffset = new Cesium.HeadingPitchRange(0.0, DefaultPitchAngleRad, DefaultFlyingAltitudeMeters);
 
 let viewer = null;
+
+let startTime;
+let nextTimeStep;
+
+let BalloonSurrogateEntity = null;
+let BuildingTileSet = null;
+
+window.bitws_initStartingLocation = function(socket) {
+    
+    if (viewer != null) {
+	// Retrieve default starting position from server, and dreate (surrogate) balloon entity at that position
+
+	socket.emit('get_starting_location', (response_data) => {
+	    
+	    const default_long = response_data.coordinates[0];
+	    const default_lat  = response_data.coordinates[1];
+	    const default_alt  = response_data.coordinates[2];
+	    
+	    BalloonSurrogateEntity = viewer.entities.add({
+		name: "The (surrogate) hot air balloon",
+		// Move entity via simulation time
+		availability: new Cesium.TimeIntervalCollection([
+		    new Cesium.TimeInterval({
+			start: startTime,
+			stop: startTime
+		    }),
+		]),
+		// Use path created by the function
+		//position: Cesium.Cartesian3.fromDegrees(DefaultStartingPosition.long,DefaultStartingPosition.lat,DefaultStartingPosition.height), // ****
+		position: Cesium.Cartesian3.fromDegrees(default_long,default_lat,default_alt),
+		// Placeholder entity visuals
+		ellipsoid: {
+		    radii: new Cesium.Cartesian3(52.0, 52.0, 52.0),
+		    material: Cesium.Color.RED.withAlpha(0),
+		},
+		// Show path of hot air balloon
+		path: {
+		    resolution: 1,
+		    // material: new Cesium.PolylineGlowMaterialProperty({
+		    //   glowPower: 0.1,
+		    //   color: Cesium.Color.YELLOW,
+		    // }),
+		    width: .1,
+		},
+	    });
+	    
+	    // Deliberately wait for 4 seconds, with Cesium showing its initial world view, before
+	    // changing to the default location provided by the BITW server
+	    setTimeout(function() {
+		// Quick camera focus to entity 
+		viewer.zoomTo(BalloonSurrogateEntity, cameraOffset);
+		viewer.scene.primitives.add(BuildingTileSet);
+		
+		// Or set tracked entity for instant zoom
+		// viewer.trackedEntity = BalloonSurrogateEntity;
+	    },4000);    	
+	});    
+    }
+
+}
+
+
 try {
     viewer = new Cesium.Viewer("cesiumContainer", {
 	terrain: Cesium.Terrain.fromWorldTerrain(),
 	infoBox: false,
 	selectionIndicator: false,
     });
+
+    // Set startTime to current time
+    startTime = viewer.clock.currentTime;
+    // Initialise nextTimeStep
+    nextTimeStep = startTime;
+
+    // Set clock settings
+    viewer.clock.startTime = startTime.clone();
+    viewer.clock.currentTime = startTime.clone();
+    //viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP; //Loop at the end
+    // Start animating at x1 speed
+    viewer.clock.multiplier = 1;
+    //viewer.clock.shouldAnimate = true;
+
+    viewer.scene.screenSpaceCameraController.enableZoom = false;
 }
 catch (error) {
     // One example of a error being thrown at this point is if your browser doesn't support WebGL
@@ -60,20 +148,11 @@ catch (error) {
 }
 
 
-const cameraOffset = new Cesium.HeadingPitchRange(0.0, DefaultPitchAngleRad, DefaultFlyingAltitudeMeters);
-if (viewer != null) {
-    // **** Can this be moved earlier, when viewer is created??
-    viewer.scene.screenSpaceCameraController.enableZoom = false;
-}
-
-let BalloonSurrogateEntity = null;
-
 //viewer.scene.debugShowFramesPerSecond = true;
 
 /*********************************
  * VISUALISE BUILDINGS
  *********************************/
-let BuildingTileSet = null;
 if (viewer != null) {
     // Google Map's Photorealistic 3d Tileset
     try {
@@ -240,23 +319,6 @@ const TimeStepInSeconds = minute * 30;
 
 
 /* INITIAL VALUES ON LOAD */
-let startTime;
-let nextTimeStep;
-
-if (viewer != null) {
-    // Set startTime to current time
-    startTime = viewer.clock.currentTime;
-    // Initialise nextTimeStep
-    nextTimeStep = startTime;
-
-    // Set clock settings
-    viewer.clock.startTime = startTime.clone();
-    viewer.clock.currentTime = startTime.clone();
-    //viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP; //Loop at the end
-    // Start animating at x1 speed
-    viewer.clock.multiplier = 1;
-    //viewer.clock.shouldAnimate = true;
-}
 
 // Track the last time generatePath that was called
 let lastGeneratePathTime = null;
@@ -520,56 +582,6 @@ async function teleportToCurrentCity()
 /*********************************
  * ENTITIES
  *********************************/
-
-if (viewer != null) {
-    // Retrieve default starting position from server, and dreate (surrogate) balloon entity at that position
-
-    socket.emit('get_starting_location', (response_data) => {
-
-	const default_long = response_data.coordinates[0];
-	const default_lat  = response_data.coordinates[1];
-	const default_alt  = response_data.coordinates[2];
-	
-	BalloonSurrogateEntity = viewer.entities.add({
-	    name: "The (surrogate) hot air balloon",
-	    // Move entity via simulation time
-	    availability: new Cesium.TimeIntervalCollection([
-		new Cesium.TimeInterval({
-		    start: startTime,
-		    stop: startTime
-		}),
-	    ]),
-	    // Use path created by the function
-	    //position: Cesium.Cartesian3.fromDegrees(DefaultStartingPosition.long,DefaultStartingPosition.lat,DefaultStartingPosition.height), // ****
-	    position: Cesium.Cartesian3.fromDegrees(default_long,default_lat,default_alt),
-	    // Placeholder entity visuals
-	    ellipsoid: {
-		radii: new Cesium.Cartesian3(52.0, 52.0, 52.0),
-		material: Cesium.Color.RED.withAlpha(0),
-	    },
-	    // Show path of hot air balloon
-	    path: {
-		resolution: 1,
-		// material: new Cesium.PolylineGlowMaterialProperty({
-		//   glowPower: 0.1,
-	    //   color: Cesium.Color.YELLOW,
-		// }),
-	    width: .1,
-	    },
-	});
-	
-	// Deliberately wait for 4 seconds, with Cesium showing its initial world view, before
-	// changing to the default location provided by the BITW server
-	setTimeout(function() {
-	    // Quick camera focus to entity 
-	    viewer.zoomTo(BalloonSurrogateEntity, cameraOffset);
-	    viewer.scene.primitives.add(BuildingTileSet);
-	    
-	    // Or set tracked entity for instant zoom
-	    // viewer.trackedEntity = BalloonSurrogateEntity;
-	},4000);    	
-    });    
-}
 
 
 //Create Path Entity

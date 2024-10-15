@@ -21,13 +21,14 @@ function BitwChat({socket, username, room}) {
 	    const mins  = date_now.getMinutes();
 	    
 	    const time_str = hours + ":" + String(mins).padStart(2,"0");
-	    
+	    const message_num = messageList.length + 1;
+	    const key = "message-"+message_num;
             const messageData = {
-                room: room,
-                author: username,
+                room:    room,
+                author:  username,
                 message: currentMessage,
-                //time: new Date(Date.now()).getHours() + ":" + new Date(Date.now()).getMinutes(),
-		time: time_str
+		time:    time_str,
+		key:     key
 
             };
             
@@ -169,10 +170,10 @@ function BitwChat({socket, username, room}) {
         
         // Cleanup the socket event listener to avoid memory leaks
         return () => {
-        socket.off("receive_message");
-        socket.off("update_board");
-        socket.off("show_player_scores");
-    };
+          socket.off("receive_message");
+          socket.off("update_board");
+          socket.off("show_player_scores");
+	};
     }, [socket]);
 
     // audio-background and audio-music    
@@ -182,14 +183,6 @@ function BitwChat({socket, username, room}) {
 	console.log('Initialising ambient background audio');
 	const audio_background = document.getElementById('audio-background');
 	audio_background.volume = 0.0;
-
-	/*
-	audio_background.addEventListener("timeupdate", function() {
-	    crossfade_audio(audio_background,1.0);
-	});
-
-	audio_background.play();
-	*/
 
 	fetch(SERVER_URL+'/get-audio-background-playlist')
 	    .then((res) => {
@@ -271,19 +264,20 @@ function BitwChat({socket, username, room}) {
             </div>
             <div className="chat-body">
             <ScrollToBottom className="message-container">
-          {messageList.map((messageContent) => {
+            {messageList.map((messageContent,i) => {
             return (
               <div
                 className="message"
+		key={`message-${i}`}
                 id={username === messageContent.author ? "you" : "other"}
               >
-                <div>
-                  <div className="message-content">
-                    <p>{messageContent.message}</p>
+                <div key={`message-pair-${i}`}>
+                  <div className="message-content" key={`message-content-${i}`}>
+                    <p key={`message-content-p-${i}`}>{messageContent.message}</p>
                   </div>
-                  <div className="message-meta">
-                    <p id="time">{messageContent.time}</p>
-                    <p id="author">{messageContent.author}</p>
+                  <div className="message-meta" key={`message-meta-${i}`}>
+                    <p id="time"   key={`message-meta-time-${i}`}>{messageContent.time}</p>
+                    <p id="author" key={`message-meta-author-${i}`}>{messageContent.author}</p>
                   </div>
                 </div>
               </div>

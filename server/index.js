@@ -29,7 +29,6 @@ app.use((req, res, next) => {
 // Serve static files from the "public" directory
 const FullBuildDirectory = path.join(__dirname, '..','client','build');
 app.use(express.static(FullBuildDirectory));
-//app.use(express.static(path.join(__dirname, '../client/build'))); // ****
 
 var chat = __dirname + '/src';
 app.use('/src', serveindex(chat));
@@ -121,6 +120,7 @@ io.on("connection", (socket) => {
     
     //listens from client side if they joined a room - gets data (in this case the room) from that particular client 
     socket.on("join_room", (roomIdData) => {
+	console.log("**** socket.on('join_room'), roomIdData = ", roomIdData);
         socket.join(roomIdData);
 
         // initialise the allPlayers object for each player
@@ -133,7 +133,7 @@ io.on("connection", (socket) => {
         }
 
         if (!cityForEachRoom[roomIdData]) {
-            if(cityIndex > shuffledCitiesArray.length){
+            if(cityIndex >= shuffledCitiesArray.length){ // **** changed to >=
                 cityIndex = 0;
             } else {
                 cityForEachRoom[roomIdData] = shuffledCitiesArray[cityIndex];
@@ -167,7 +167,6 @@ io.on("connection", (socket) => {
             room: data.room,
             author: 'BITW Assistant',
             message: `${data.author} guessed correctly!`,
-            //time: new Date(Date.now()).getHours() + ":" + new Date(Date.now()).getMinutes() // ****
 	    time: time_str
         };
 
@@ -193,7 +192,8 @@ io.on("connection", (socket) => {
             let isCorrectCount = 0;
             let playerKeys = Object.keys(allPlayers);
 
-            for (let i = 0; i < playerKeys.length; i += 2) {  // ****
+            //for (let i = 0; i < playerKeys.length; i += 2) {  // ****
+            for (let i = 0; i < playerKeys.length; i++) {  // ****		
                 let playerKey = playerKeys[i];
                 let player = allPlayers[playerKey];
                 if (player.room === data.room && player.isCorrect) {
@@ -206,7 +206,15 @@ io.on("connection", (socket) => {
             // check if the room exists 
             if(allRooms[data.room]){
                 // if everyone in the room has guessed correct
-                if (isCorrectCount == Math.ceil(allRooms[data.room].count / 2)) { // ****
+                //if (isCorrectCount == Math.ceil(allRooms[data.room].count / 2)) { // ****
+		console.log("**** isCorrectCount = ", isCorrectCount);
+		const num_in_room = allRooms[data.room].count;
+
+		console.log("**** allRooms[data.room] = ", allRooms[data.room]);
+		console.log("**** num_in_room = ", num_in_room);
+		
+                //if (isCorrectCount == Math.ceil(allRooms[data.room].count)) { // ****
+		if (isCorrectCount == num_in_room)) { // ****
                     // if the cityIndex is more than or equal to the length of the cities array
                     if (cityIndex >= shuffledCitiesArray.length){
                         // set index back to the first city
@@ -264,7 +272,8 @@ io.on("connection", (socket) => {
         delete allPlayers[socket.id];
     });
 
-    function getRoomCount(){
+    function getRoomCount() {
+	console.log("**** getRoomCount(), allPlayers: ", allPlayers);
         let roomCounts = {};
         for (let player in allPlayers){
             let room = allPlayers[player].room;
