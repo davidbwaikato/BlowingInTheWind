@@ -214,7 +214,7 @@ io.on("connection", (socket) => {
 		console.log("**** num_in_room = ", num_in_room);
 		
                 //if (isCorrectCount == Math.ceil(allRooms[data.room].count)) { // ****
-		if (isCorrectCount == num_in_room)) { // ****
+		if (isCorrectCount == num_in_room) { // ****
                     // if the cityIndex is more than or equal to the length of the cities array
                     if (cityIndex >= shuffledCitiesArray.length){
                         // set index back to the first city
