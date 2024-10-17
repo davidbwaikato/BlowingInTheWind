@@ -31,7 +31,6 @@ to flying and/or the elements (weather) are:
   Pink Floyd        - Learning To Fly
   Scorpions         - Wind Of Change
   Seals and Crofts  - Summer Breeze
-  Take That         - The Flood
   The Beatles       - Here Comes The Sun
   Tom Rosenthal     - About The Weather
   Travis            - Why Does It Always Rain On Me
