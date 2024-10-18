@@ -9,18 +9,12 @@
   <!-- Include the CesiumJS JavaScript and CSS files -->
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>  
   <script src="/socket.io/socket.io.js"></script>
-  <!--
-  <script type="module">
-    import { bitw_socket } from './SocketInstance.js';
-    window.bitw_socket = bitw_socket; // Make the function globally accessible    
-  </script>
-  -->
   <script type="module" src="bitw_script.js"></script>
   <script type="module" src="balloon.js"></script>
   <script type="module">
     import { imageClick } from './balloon.js';
     window.imageClick = imageClick; // Make the function globally accessible
-    </script>
+  </script>
 
   <!-- Import React and ReactDOM -->
   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
