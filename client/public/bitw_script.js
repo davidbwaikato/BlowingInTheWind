@@ -37,8 +37,9 @@ window.bitws_registerSocketOn = function(socket) {
 	
 	const city_name = data.city;    
 	const city_coord_xyz = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]); // convert (lat,long,height) into coord (x,y,z)
+	const city_cartographic_rad = Cesium.Cartographic.fromCartesian(city_coord_xyz); // convert (x,y,z) into (long,lat,height) with angles in radians
 	
-	const city_info = { cityName: city_name, coord_xyz: city_coord_xyz };
+	const city_info = { cityName: city_name, coord_xyz: city_coord_xyz, cartographic_rad: city_cartographic_rad };
 	
 	appendCity(city_info);    
 	teleportToCurrentCity();
@@ -169,23 +170,29 @@ if (viewer != null) {
  * WIND API
  *********************************/
 //module lever variables to store wind data
-let windSpeed, windDirection;
+//let windSpeed, windDirection; // ****
 
-//conversion to degrees from cartesian
+// Conversion to degrees (long,lat) from cartesian
+//
+// [ Aligns with details given on StackOverflow:
+//     https://stackoverflow.com/questions/28358403/how-to-convert-x-y-z-to-longitude-latitude-altitude-in-cesium ]
+
 function cartesianToDegrees(cartesian) {
-  const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-  const longitude = Cesium.Math.toDegrees(cartographic.longitude);
-  const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-  return {longitude, latitude};
+    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+
+    return { longitude: longitude, latitude: latitude};
 }
 
-//gets the wind data and stores it to the module level variables 
+//gets the wind data and stores it to the module level variables
+/*
 async function fetchAndStoreWind(latitude, longitude){
-  const weatherWind=  await fetchWeatherData(latitude, longitude);
-  windDirection = weatherWind.windDirection;
-  windSpeed = weatherWind.windSpeed;
-}
+    const weatherWind=  await fetchWeatherData(latitude, longitude);
 
+    return { windDirection: weatherWind.windDirection, windSpeed: weatherWind.windSpeed }
+}
+*/
 
 /*********************************
  * Location (e.g. city) based utility functions
@@ -281,7 +288,7 @@ function generateRandomStartingPoint(newCity)
   }
 
   let randomStartingPointInfo = { cityName: newCity.cityName, coord_xyz: randomStartingPoint };
-  console.log("Pushing on cityInfo randomStatingPoint: " + JSON.stringify(randomStartingPointInfo));
+  console.log("**** Pushing on cityInfo randomStatingPoint: ", randomStartingPointInfo);
   JourneyItinerary.startingCityPointsArray.push(randomStartingPointInfo);
 
   if (viewer != null) {
@@ -294,7 +301,7 @@ function generateRandomStartingPoint(newCity)
 
       // ****
       console.log("**** Unclear why all the points in JourneyItinerary.startingCityPointsArray are added in again as entities");  
-      for(let i = 0; i < JourneyItinerary.startingCityPointsArray.length; i++){
+      for(let i=0; i<JourneyItinerary.startingCityPointsArray.length; i++){
 	  viewer.entities.add({
 	      position: JourneyItinerary.startingCityPointsArray[i].coord_xyz,
 	      name: JourneyItinerary.startingCityPointsArray[i].cityName,
@@ -308,14 +315,14 @@ function generateRandomStartingPoint(newCity)
  * PATHING
  *********************************/
 // One minute
-const minute = 60;
+const MinuteInSecs = 60;
 
 // How many points to put on the map
 const NumPathPoints = 5;
 
 // Set up clock
 // => Time it takes to go to destination
-const TimeStepInSeconds = minute * 30;
+const TimeStepInSeconds = MinuteInSecs * 30;
 
 
 /* INITIAL VALUES ON LOAD */
@@ -331,7 +338,7 @@ let pathEntitiesRemoved = 0;
 let epsilon = 0.00005;   // tolerance value
 
 // Array to store path positions
-let positionPathPointArray = [];
+let positionPathPointArray = null;
 
 /* CREATE PATH */
 // Create the path for the target object
@@ -341,7 +348,7 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
   // Storage for last point on map where wind data was obtained from
   let lastPointOnMap = startPos;
   // Calculate timeStep
-  let timeStep = minute * timeToNextPoint;
+  let timeStep = MinuteInSecs * timeToNextPoint;
   // Set new stopping point
   let stop = Cesium.JulianDate.addSeconds(startTime, timeStep * numOfPoints, new Cesium.JulianDate());
   // Update viewer's clock to extend animations
@@ -354,11 +361,11 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
   positionProperty.addSample(startTime, lastPointOnMap); // We might need to remove this eventually as this might bug out if 2 points are on the exact same coordinates
 
   // Plot points on the map
-  for (let i = 0; i < NumPathPoints; i++) {  
+  for (let i=0; i<NumPathPoints; i++) {  
     // Calculate timestep
     const time = Cesium.JulianDate.addSeconds(nextTimeStep, TimeStepInSeconds, new Cesium.JulianDate());
     // Get wind data from last point to get the next point to plot
-    const thisPoint = await getNextPoint(lastPointOnMap);
+    const thisPoint = await getWindBlownNextPoint(lastPointOnMap);
     // Change lastPoint to this current one
     lastPointOnMap = thisPoint;
     //add position to array
@@ -406,7 +413,7 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
 
 /* Create animated path*/
 // Generate animated path
-async function animatePath(pEntity) {
+async function animatePath(pEntity,startingCoordXYZ,positionPathToFollow,positionDeltaXYZ) {
     // Create SampledPositionProperty
     //console.log("LOG 1 (animatePath):", new Date().toISOString());
     const positionProperty = new Cesium.SampledPositionProperty();
@@ -416,18 +423,19 @@ async function animatePath(pEntity) {
     //positionProperty.addSample(pEntityStartTime, startPos); 
     
     //add first position
-    const current_starting_coord_xyz = getCurrentStartingCoordXYZ();
-    
-    positionProperty.addSample(pEntityStartTime, current_starting_coord_xyz);
+    positionProperty.addSample(pEntityStartTime, startingCoordXYZ);
     //console.log(pEntity); // ****
     //positionProperty.addSample(pEntityStartTime, pEntity.position);
     
-    //console.log("Path Point One: " + current_starting_coord_xyz)
+    //console.log("Path Point One: " + startingCoordXYZ)
     nextTimeStep = pEntityStartTime;
     
-    for(let i = 0; i < positionPathPointArray.length; i++) {
-      const time = Cesium.JulianDate.addSeconds(nextTimeStep, TimeStepInSeconds * pathSpeed, new Cesium.JulianDate());
-      const thisPoint = positionPathPointArray[i];
+    for(let i=0; i<positionPathToFollow.length; i++) {
+	const time = Cesium.JulianDate.addSeconds(nextTimeStep, TimeStepInSeconds * pathSpeed, new Cesium.JulianDate());
+	console.log(`positionPathToFollow[${i}]:`, positionPathToFollow[i]);
+	console.log("positionDeltaXYZ:",positionDeltaXYZ);
+	const thisPoint = new Cesium.Cartesian3();
+	Cesium.Cartesian3.add(positionPathToFollow[i],positionDeltaXYZ,thisPoint);
 
       //console.log("Entity position" + i + ": ");
       //console.log(thisPoint);
@@ -471,10 +479,10 @@ async function animatePath(pEntity) {
           //console.log("LOG 7 (animatePath):", new Date().toISOString());
           
           // let positionAtTime = roundPosition(positionProperty.getValue(viewer.clock.currentTime));
-          // let finalPosition = roundPosition(positionPathPointArray[positionPathPointArray.length - 1]);
+          // let finalPosition = roundPosition(positionPathToFollow[positionPathToFollow.length - 1]);
 
           let positionAtTime = positionProperty.getValue(viewer.clock.currentTime);
-          let finalPosition = positionPathPointArray[positionPathPointArray.length - 1];
+          let finalPosition = positionPathToFollow[positionPathToFollow.length - 1];
 
           //console.log("Position at time: " + positionAtTime);
           //console.log("Final position: " + finalPosition);
@@ -513,11 +521,15 @@ async function animatePath(pEntity) {
 
 /* GET NEXT POINT */
 // Get next point using wind data
-async function getNextPoint(originPoint) {
+async function getWindBlownNextPoint(originPoint) {
   // Wait for wind data
   let originDegrees = cartesianToDegrees(originPoint);
   
-  await fetchAndStoreWind(originDegrees.latitude, originDegrees.longitude);
+  //await fetchAndStoreWind(originDegrees.latitude, originDegrees.longitude); // ****    
+  const weatherWind =  await fetchWeatherData(originDegrees.latitude, originDegrees.longitude);
+  const windDirection = weatherWind.windDirection;
+  const windSpeed     = weatherWind.windSpeed;
+    
   // Convert wind direction to radians
   let windDirRad = Cesium.Math.toRadians(windDirection);
   // Calculate magnitude (distance)
@@ -586,14 +598,38 @@ async function teleportToCurrentCity()
 
 //Create Path Entity
 async function createPathEntity() {
-  //console.log("createPathEntity()");
+    //console.log("createPathEntity()");
 
-  console.log(`**** createPathEntity(): [currentCityIndexPos = ${JourneyItinerary.currentCityIndexPos}]`);
-  console.log("randomStartingPoints: " + JSON.stringify(JourneyItinerary.startingCityPointsArray))
+    console.log(`**** createPathEntity(): [currentCityIndexPos = ${JourneyItinerary.currentCityIndexPos}]`);
+    console.log("**** randomStartingPoints: ", JSON.stringify(JourneyItinerary.startingCityPointsArray));
 
+    const current_city_starting_coord_xyz = getCurrentStartingCoordXYZ();
+    const current_city_starting_cartographic_rad = Cesium.Cartographic.fromCartesian(current_city_starting_coord_xyz);
+    const long_rad = current_city_starting_cartographic_rad.longitude;
+    const lat_rad  = current_city_starting_cartographic_rad.latitude;
+    const height   = current_city_starting_cartographic_rad.height;
 
-  const current_city_starting_coord_xyz = getCurrentStartingCoordXYZ();
-  
+    const z_height = current_city_starting_coord_xyz.z;
+    
+    //console.log(`z vs. height = (${current_city_starting_coord_xyz.z} vs. ${height})`);
+    
+    const delta_x_meters1 = 3.0;    
+    const delta_y_meters1 = 5.0;    
+    const delta_x_meters2 = 5.0;    
+    const delta_y_meters2 = 3.0;    
+
+    //const long_delta_rad = delta_x_meters / height;
+    //const lat_delta_rad  = delta_y_meters / height;
+
+    //const x_delta_rad = 0;
+    //const y_delta_rad = 0;
+    const x_delta_rad1 = delta_x_meters1 / z_height;
+    const y_delta_rad1 = delta_y_meters1 / z_height;
+    const x_delta_rad2 = delta_x_meters2 / z_height;
+    const y_delta_rad2 = delta_y_meters2 / z_height;
+    
+    //console.log(`delta_rad (x,y) = (${x_delta_rad},${x_delta_rad})`);
+    
     // Define key dimensions of array, in metres
     const arrowBodyLength = 20.0; 
     const arrowBodyWidth  =  6.0;  
@@ -617,63 +653,123 @@ async function createPathEntity() {
 	arrowPosition.z += current_city_starting_coord_xyz.z;
   }
 
-    
-  const pathEntity = viewer.entities.add({ 
-    name: "Path Entity",
-    // Move entity via simulation time
-    
-    availability: new Cesium.TimeIntervalCollection([
-      new Cesium.TimeInterval({
-        start: viewer.clock.currentTime,
-        stop: Cesium.JulianDate.addSeconds(viewer.clock.currentTime, TimeStepInSeconds * NumPathPoints, new Cesium.JulianDate()),
-      }),
-    ]),
+    const boxes = [ 
+	{
+	    dimensions : new Cesium.Cartesian3( 3, 1, 1),
+	    material : Cesium.Color.WHITE,
+	    //outline : true,
+	    //outlineColor : Cesium.Color.YELLOW
+	},
+	{
+	    dimensions : new Cesium.Cartesian3( 8, 2, 1),
+	    material : Cesium.Color.WHITE,
+	    //outline : true,
+	    //outlineColor : Cesium.Color.YELLOW
+	},	
+	{
+	    dimensions : new Cesium.Cartesian3(20, 3, 1),
+	    material : Cesium.Color.WHITE,
+	    //outline : true,
+	    //outlineColor : Cesium.Color.YELLOW
+	},
+	{
+	    dimensions : new Cesium.Cartesian3( 8, 2, 1),
+	    material : Cesium.Color.WHITE,
+	    //outline : true,
+	    //outlineColor : Cesium.Color.YELLOW
+	},	
+	{
+	    dimensions : new Cesium.Cartesian3( 3, 1, 1),
+	    material : Cesium.Color.WHITE,
+	    //outline : true,
+	    //outlineColor : Cesium.Color.YELLOW
+	}
+    ];
+    const positions = [
+	new Cesium.Cartesian3.fromRadians(long_rad+y_delta_rad2,    lat_rad-x_delta_rad2, height),
+	new Cesium.Cartesian3.fromRadians(long_rad+y_delta_rad1,    lat_rad-x_delta_rad1, height),
+	new Cesium.Cartesian3.fromRadians(             long_rad,                 lat_rad, height),
+	new Cesium.Cartesian3.fromRadians(long_rad+y_delta_rad1,    lat_rad+x_delta_rad1, height),
+	new Cesium.Cartesian3.fromRadians(long_rad+y_delta_rad2,    lat_rad+x_delta_rad2, height)
+    ];
 
-    position: current_city_starting_coord_xyz,
-      
-    box : {
-      dimensions : new Cesium.Cartesian3(20, 6, 1),
-      material : Cesium.Color.BLUE,
-      //outline : true,
-      outlineColor : Cesium.Color.YELLOW
-    },
-      
+    console.log("**** positions: ", JSON.stringify(positions));
+    
+    /*
+    const deltas = [
+	new Cesium.Cartesian3( -6, 5, 0),
+	new Cesium.Cartesian3(  0, 0, 0),
+	new Cesium.Cartesian3(  6, 5, 0)	
+    ];
+    */
+    
+
+    for (let i=0; i<boxes.length; i++) {
+	const box = boxes[i];
+	//const delta = deltas[i];
+
+	//let position = new Cesium.Cartesian3();
+	//Cesium.Cartesian3.add(current_city_starting_coord_xyz,delta,position);
+
+	const position = positions[i];
+	console.log(`**** position[${i}] = `, position);
+	const pathEntity = viewer.entities.add({ 
+	    name: "Path Entity",
+	    // Move entity via simulation time
+	    
+	    availability: new Cesium.TimeIntervalCollection([
+		new Cesium.TimeInterval({
+		    start: viewer.clock.currentTime,
+		    stop: Cesium.JulianDate.addSeconds(viewer.clock.currentTime, TimeStepInSeconds * NumPathPoints, new Cesium.JulianDate()),
+		}),
+	    ]),
+	    
+	    //position: current_city_starting_coord_xyz,
+	    position: position,
+/*	    
+	    box : {
+		dimensions : new Cesium.Cartesian3(20, 6, 1),
+		material : Cesium.Color.BLUE,
+		//outline : true,
+		outlineColor : Cesium.Color.YELLOW
+	    },
+  */    
+	    box: box,
       
 /*    
-    polygon: {
-	//hierarchy: new Cesium.PolygonHierarchy(rectanglePositions),
-	hierarchy: arrowPositions,
-	material : Cesium.Color.WHITE,
-	perPositionHeight: true,
-	//height: 0,
-	outline : true,
-	outlineColor : Cesium.Color.BLACK,
-	outlineWidth : 3
+         polygon: {
+   	    //hierarchy: new Cesium.PolygonHierarchy(rectanglePositions),
+	    hierarchy: arrowPositions,
+	    material : Cesium.Color.WHITE,
+	    perPositionHeight: true,
+	    //height: 0,
+	    outline : true,
+	    outlineColor : Cesium.Color.BLACK,
+	    outlineWidth : 3
 	
-    },
-    
+        },
   */    
       
-    // path: {
-    //   resolution: 1,
-    //   material: new Cesium.PolylineGlowMaterialProperty({
-    //     glowPower: 0.1,
-    //     color: Cesium.Color.BLUE,
-    //   }),
-    //   width: 15,
-    // },
-  });
+        // path: {
+        //   resolution: 1,
+        //   material: new Cesium.PolylineGlowMaterialProperty({
+        //     glowPower: 0.1,
+        //     color: Cesium.Color.BLUE,
+        //   }),
+        //   width: 15,
+        // },
+	});
 
-  //console.log("LOG: Entity created at", new Date().toISOString());
+	//console.log("LOG: Entity created at", new Date().toISOString());
 
-  //console.log("Supressing animatePath()");
-  await animatePath(pathEntity);
+	//await animatePath(pathEntity,position,positionPathPointArray,delta);
+
+    }
+    
   //console.log("LOG: Path animation completed at", new Date().toISOString());
 }
 
 
-
-//createPathEntity();
 function generateAnimatedPath(){
   //console.log("generate method called");
   if(viewer.clock.shouldAnimate){
@@ -801,12 +897,13 @@ let minutesText = document.getElementById("minutes");
 let secondsText = document.getElementById("seconds");
 
 function startTimer(duration) {
-  let timer = duration, minutes, seconds;
+    let timer_duration = duration;
+    //let minutes, seconds;  ****
 
   setInterval(function () {
     // Calculate time to display
-    minutes = parseInt(timer / 60, 10);
-    seconds = parseInt(timer % 60, 10);
+    let minutes = parseInt(timer_duration / 60, 10);
+    let seconds = parseInt(timer_duration % 60, 10);
 
     // Add 0 if less than 10
     minutes = minutes < 10 ? "0" + minutes : minutes;
@@ -816,8 +913,8 @@ function startTimer(duration) {
     minutesText.innerText = minutes;
     secondsText.innerText = seconds;
 
-    // Change colour to red if timer has 10 seconds left
-    if(timer <= 10) {
+    // Change colour to red if timer_duration has 10 seconds left
+    if(timer_duration <= 10) {
       minutesText.style.color = '#ff0000';
       secondsText.style.color = '#ff0000';
     } else {
@@ -826,9 +923,9 @@ function startTimer(duration) {
     }
 
     // When timer ends
-    if (--timer < 0) {
+    if (--timer_duration < 0) {
       // Reset duration
-      timer = duration;
+      timer_duration = duration;
       // Call nextCity
       //teleportToCurrentCity();
     }
