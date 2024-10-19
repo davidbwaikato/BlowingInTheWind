@@ -754,9 +754,10 @@ async function createPathEntity() {
 	    
 	box : {
 	    dimensions : new Cesium.Cartesian3(20, 6, 1),
-	    material : Cesium.Color.BLUE,
-	    //outline : true,
-	    outlineColor : Cesium.Color.YELLOW
+	    material : Cesium.Color.WHITE,
+	    outline : true,
+	    outlineWidth : 3,	    
+	    outlineColor : Cesium.Color.BLACK
 	},
 	
         // path: {
