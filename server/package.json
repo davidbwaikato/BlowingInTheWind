@@ -10,10 +10,15 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@langchain/core": "^0.3.13",
+    "@langchain/langgraph": "^0.2.16",
+    "@langchain/openai": "^0.3.11",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "nodemon": "^3.1.0",
     "serve-index": "^1.9.1",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "uuid": "^10.0.0",
+    "uuidv4": "^6.2.13"
   }
 }
