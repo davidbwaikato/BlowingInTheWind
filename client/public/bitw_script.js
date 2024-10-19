@@ -411,9 +411,7 @@ async function createPath(targetObject, startPos, numOfPoints, timeToNextPoint) 
   return positionProperty;
 }
 
-/* Create animated path*/
-// Generate animated path
-async function animatePath(pEntity,startingCoordXYZ,positionPathToFollow,positionDeltaXYZ) {
+async function animatePath(pEntity,startingCoordXYZ,positionPathToFollow) {
     // Create SampledPositionProperty
     //console.log("LOG 1 (animatePath):", new Date().toISOString());
     const positionProperty = new Cesium.SampledPositionProperty();
@@ -430,32 +428,166 @@ async function animatePath(pEntity,startingCoordXYZ,positionPathToFollow,positio
     //console.log("Path Point One: " + startingCoordXYZ)
     nextTimeStep = pEntityStartTime;
     
-    for(let i=0; i<positionPathToFollow.length; i++) {
+    for (let i=0; i<positionPathToFollow.length; i++) {
 	const time = Cesium.JulianDate.addSeconds(nextTimeStep, TimeStepInSeconds * pathSpeed, new Cesium.JulianDate());
-	console.log(`positionPathToFollow[${i}]:`, positionPathToFollow[i]);
-	console.log("positionDeltaXYZ:",positionDeltaXYZ);
-	const thisPoint = new Cesium.Cartesian3();
-	Cesium.Cartesian3.add(positionPathToFollow[i],positionDeltaXYZ,thisPoint);
 
-      //console.log("Entity position" + i + ": ");
-      //console.log(thisPoint);
+	const thisPoint = positionPathToFollow[i];
+	
+	//console.log(`**** positionPathToFollow[${i}]:`, positionPathToFollow[i]);
+	//console.log("**** positionDeltaXYZ:",positionDeltaXYZ);
+	//const thisPoint = new Cesium.Cartesian3();
+	//Cesium.Cartesian3.add(positionPathToFollow[i],positionDeltaXYZ,thisPoint);
 
-      positionProperty.addSample(time, thisPoint);
-      //console.log("Path Point: " + thisPoint);
-      nextTimeStep = time;
-      // display position
+	//console.log("Entity position" + i + ": ");
+	//console.log(thisPoint);
+
+	positionProperty.addSample(time, thisPoint);
+	//console.log("Path Point: " + thisPoint);
+
+	nextTimeStep = time;
+	// display position
       
-      // viewer.entities.add({
-      //   position: thisPoint,
-      //   //name: text,
-      //   point: { pixelSize: 10, color: Cesium.Color.GREEN }
-      // });
+	// viewer.entities.add({
+	//   position: thisPoint,
+	//   //name: text,
+	//   point: { pixelSize: 10, color: Cesium.Color.GREEN }
+	// });
     }
     //console.log("LOG 2 (animatePath):", new Date().toISOString());
 
     pEntity.position = positionProperty;
     // Orient balloon towards movement
-    pEntity.orientation = new Cesium.VelocityOrientationProperty(positionProperty);
+    //console.log("**** changing orientation");
+    pEntity.orientation = new Cesium.VelocityOrientationProperty(positionProperty); // ****
+    
+    // Change interpolation mode to make path more curved
+    pEntity.position.setInterpolationOptions({
+      interpolationDegree: 5,
+      interpolationAlgorithm:
+        Cesium.LagrangePolynomialApproximation,
+    });
+
+    //console.log("LOG 3 (animatePath):", new Date().toISOString());
+
+    //let lastPositionCheckTime = Cesium.JulianDate.now();
+
+    viewer.clock.onTick.addEventListener(function() {
+      if (viewer.clock.shouldAnimate) {
+        //console.log("LOG 4 (animatePath):", new Date().toISOString());
+        const currentTime = viewer.clock.currentTime;
+        //const elapsedTime = Cesium.JulianDate.secondsDifference(currentTime, lastPositionCheckTime);
+        
+        //if (elapsedTime >= 10) {
+          //let positionAtTime = positionProperty.getValue(viewer.clock.currentTime);
+        if(positionProperty.getValue(viewer.clock.currentTime) !== undefined) {
+          //console.log("LOG 7 (animatePath):", new Date().toISOString());
+          
+          // let positionAtTime = roundPosition(positionProperty.getValue(viewer.clock.currentTime));
+          // let finalPosition = roundPosition(positionPathToFollow[positionPathToFollow.length - 1]);
+
+          let positionAtTime = positionProperty.getValue(viewer.clock.currentTime);
+          let finalPosition = positionPathToFollow[positionPathToFollow.length - 1];
+
+          //console.log("Position at time: " + positionAtTime);
+          //console.log("Final position: " + finalPosition);
+
+          //console.log("LOG 5: POSITON AT GIVEN TIME: " + positionAtTime + " at " + new Date().toISOString());
+          
+          //console.log("Position at given time: " + positionAtTime);
+          //console.log("Final Position: " + finalPosition);
+          
+          
+          if (Cesium.Cartesian3.equalsEpsilon(positionAtTime, finalPosition, epsilon)) {
+            viewer.entities.remove(pEntity);
+            pathEntitiesRemoved++;
+            //console.log("Removed: " + pathEntitiesRemoved);
+          }
+          else{
+            //console.log("Positions not equal");
+          }
+
+          //lastPositionCheckTime = currentTime;     
+        }
+        //}
+      }
+    });
+
+    //console.log("LOG 6 (animatePath):", new Date().toISOString());
+
+    // console.log("Sampled position: ");
+    // console.log(positionProperty);
+    
+    //console.log("NUMBER OF ACTIVE ENTITIES: " + countActiveEntities());
+    //console.log("ENTITY POSITIONS: ");
+    //console.log(positionProperty);
+    return positionProperty;
+  }
+
+async function animatePathMultiBoxUNUSED(pEntity,startingCoordXYZ,positionPathToFollow,positionDeltaRad, orientationStartingCoordXYZ,orientationPathToFollow) {
+    // Create SampledPositionProperty
+    //console.log("LOG 1 (animatePath):", new Date().toISOString());
+    const positionProperty = new Cesium.SampledPositionProperty();
+    const orientationPositionProperty = new Cesium.SampledPositionProperty();
+    
+    // Plot points on the map
+    let pEntityStartTime = viewer.clock.currentTime;
+    //positionProperty.addSample(pEntityStartTime, startPos); 
+    
+    //add first position
+    positionProperty.addSample(pEntityStartTime, startingCoordXYZ);
+    orientationPositionProperty.addSample(pEntityStartTime, orientationStartingCoordXYZ);
+    //console.log(pEntity); // ****
+    //positionProperty.addSample(pEntityStartTime, pEntity.position);
+    
+    //console.log("Path Point One: " + startingCoordXYZ)
+    nextTimeStep = pEntityStartTime;
+    
+    for (let i=0; i<positionPathToFollow.length; i++) {
+	const time = Cesium.JulianDate.addSeconds(nextTimeStep, TimeStepInSeconds * pathSpeed, new Cesium.JulianDate());
+
+	const position_to_follow_rad = new Cesium.Cartographic.fromCartesian(positionPathToFollow[i]);
+	const long_rad = position_to_follow_rad.longitude;
+	const lat_rad  = position_to_follow_rad.latitude;
+	const height   = position_to_follow_rad.height;
+
+	const thisPoint = new Cesium.Cartesian3.fromRadians(long_rad+positionDeltaRad.y, lat_rad+positionDeltaRad.x, height);
+	//const thisPoint = new Cesium.Cartesian3.fromRadians(long_rad, lat_rad, height);
+	
+	//console.log(`**** positionPathToFollow[${i}]:`, positionPathToFollow[i]);
+	//console.log("**** positionDeltaXYZ:",positionDeltaXYZ);
+	//const thisPoint = new Cesium.Cartesian3();
+	//Cesium.Cartesian3.add(positionPathToFollow[i],positionDeltaXYZ,thisPoint);
+
+	//console.log("Entity position" + i + ": ");
+	//console.log(thisPoint);
+
+	const oposition_to_follow_rad = new Cesium.Cartographic.fromCartesian(orientationPathToFollow[i]);
+	const olong_rad = oposition_to_follow_rad.longitude;
+	const olat_rad  = oposition_to_follow_rad.latitude;
+	const oheight   = oposition_to_follow_rad.height;
+	const othisPoint = new Cesium.Cartesian3.fromRadians(olong_rad, olat_rad, oheight);
+	
+	positionProperty.addSample(time, thisPoint);
+	//console.log("Path Point: " + thisPoint);
+	orientationPositionProperty.addSample(time, othisPoint);
+
+	nextTimeStep = time;
+	// display position
+      
+	// viewer.entities.add({
+	//   position: thisPoint,
+	//   //name: text,
+	//   point: { pixelSize: 10, color: Cesium.Color.GREEN }
+	// });
+    }
+    //console.log("LOG 2 (animatePath):", new Date().toISOString());
+
+    pEntity.position = positionProperty;
+    // Orient balloon towards movement
+    //console.log("**** changing orientation");
+    //pEntity.orientation = new Cesium.VelocityOrientationProperty(positionProperty); // ****
+    pEntity.orientation = new Cesium.VelocityOrientationProperty(orientationPositionProperty);
+    
     // Change interpolation mode to make path more curved
     pEntity.position.setInterpolationOptions({
       interpolationDegree: 5,
@@ -604,31 +736,162 @@ async function createPathEntity() {
     console.log("**** randomStartingPoints: ", JSON.stringify(JourneyItinerary.startingCityPointsArray));
 
     const current_city_starting_coord_xyz = getCurrentStartingCoordXYZ();
-    const current_city_starting_cartographic_rad = Cesium.Cartographic.fromCartesian(current_city_starting_coord_xyz);
-    const long_rad = current_city_starting_cartographic_rad.longitude;
-    const lat_rad  = current_city_starting_cartographic_rad.latitude;
-    const height   = current_city_starting_cartographic_rad.height;
 
+    
+    const pathEntity = viewer.entities.add({ 
+	name: "Path Entity",
+	// Move entity via simulation time
+	
+	availability: new Cesium.TimeIntervalCollection([
+	    new Cesium.TimeInterval({
+		start: viewer.clock.currentTime,
+		stop: Cesium.JulianDate.addSeconds(viewer.clock.currentTime, TimeStepInSeconds * NumPathPoints, new Cesium.JulianDate()),
+	    }),
+	]),
+	    
+	position: current_city_starting_coord_xyz,
+
+	    
+	box : {
+	    dimensions : new Cesium.Cartesian3(20, 6, 1),
+	    material : Cesium.Color.BLUE,
+	    //outline : true,
+	    outlineColor : Cesium.Color.YELLOW
+	},
+	
+        // path: {
+        //   resolution: 1,
+        //   material: new Cesium.PolylineGlowMaterialProperty({
+        //     glowPower: 0.1,
+        //     color: Cesium.Color.BLUE,
+        //   }),
+        //   width: 15,
+        // },
+    });
+
+    //console.log("LOG: Entity created at", new Date().toISOString());
+
+    await animatePath(pathEntity,current_city_starting_coord_xyz,positionPathPointArray);
+    
+  //console.log("LOG: Path animation completed at", new Date().toISOString());
+}
+
+
+//Create Path Entity
+async function createPathEntityPolygonUNUSED() {
+    //console.log("createPathEntity()");
+
+    console.log(`**** createPathEntity(): [currentCityIndexPos = ${JourneyItinerary.currentCityIndexPos}]`);
+    console.log("**** randomStartingPoints: ", JSON.stringify(JourneyItinerary.startingCityPointsArray));
+
+    const current_city_starting_coord_xyz = getCurrentStartingCoordXYZ();
+    
+    // Define key dimensions of array, in metres
+    const arrowBodyLength = 20.0; 
+    const arrowBodyWidth  =  6.0;  
+    const arrowTipFlange  =  5.0;
+    const arrowTipLength  = 10.0;
+    
+    let arrowPositions = [
+	new Cesium.Cartesian3(-arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-left
+	new Cesium.Cartesian3( arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-right
+	new Cesium.Cartesian3( arrowBodyWidth/2,                   -arrowBodyLength/2, 0),  // Body Top-right
+	new Cesium.Cartesian3( arrowBodyWidth/2 + arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-right
+	new Cesium.Cartesian3(                                 0,  -(arrowBodyLength/2 + arrowTipLength), 0),  // Arrowhead Apex
+	new Cesium.Cartesian3(-arrowBodyWidth/2 - arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-left
+	new Cesium.Cartesian3(-arrowBodyWidth/2,                   -arrowBodyLength/2, 0)   // Body Top-left
+    ];
+    
+    for (let arrowPosition of arrowPositions) {
+	arrowPosition.x += current_city_starting_coord_xyz.x;
+	arrowPosition.y += current_city_starting_coord_xyz.y;
+	arrowPosition.z += current_city_starting_coord_xyz.z;
+    }
+    
+    //let position = new Cesium.Cartesian3();
+    //Cesium.Cartesian3.add(current_city_starting_coord_xyz,delta,position);
+
+    const pathEntity = viewer.entities.add({ 
+	name: "Path Entity",
+	// Move entity via simulation time
+	    
+	availability: new Cesium.TimeIntervalCollection([
+	    new Cesium.TimeInterval({
+		start: viewer.clock.currentTime,
+		stop: Cesium.JulianDate.addSeconds(viewer.clock.currentTime, TimeStepInSeconds * NumPathPoints, new Cesium.JulianDate()),
+	    }),
+	]),
+	    
+	//position: current_city_starting_coord_xyz,
+	//position: position,
+	/*
+	    box : {
+		dimensions : new Cesium.Cartesian3(20, 6, 1),
+		material : Cesium.Color.BLUE,
+		//outline : true,
+		outlineColor : Cesium.Color.YELLOW
+	    },
+      */
+          
+        polygon: {
+   	    //hierarchy: new Cesium.PolygonHierarchy(rectanglePositions),
+	    hierarchy: arrowPositions,
+	    material : Cesium.Color.WHITE,
+	    perPositionHeight: true,
+	    //height: 0,
+	    outline : true,
+	    outlineColor : Cesium.Color.BLACK,
+	    outlineWidth : 3
+	
+        },
+   
+      
+        // path: {
+        //   resolution: 1,
+        //   material: new Cesium.PolylineGlowMaterialProperty({
+        //     glowPower: 0.1,
+        //     color: Cesium.Color.BLUE,
+        //   }),
+        //   width: 15,
+        // },
+    });
+    
+    //console.log("LOG: Entity created at", new Date().toISOString());
+
+    //await animatePath(pathEntity,position,positionPathPointArray,delta_rad, current_city_starting_coord_xyz,positionPathPointArray);
+
+    //console.log("LOG: Path animation completed at", new Date().toISOString());
+}
+
+
+//Create Path Entity
+async function createPathEntityMultiBoxesUNUSED() {
+    //console.log("createPathEntity()");
+
+    console.log(`**** createPathEntity(): [currentCityIndexPos = ${JourneyItinerary.currentCityIndexPos}]`);
+    console.log("**** randomStartingPoints: ", JSON.stringify(JourneyItinerary.startingCityPointsArray));
+
+    const current_city_starting_coord_xyz = getCurrentStartingCoordXYZ();
     const z_height = current_city_starting_coord_xyz.z;
-    
-    //console.log(`z vs. height = (${current_city_starting_coord_xyz.z} vs. ${height})`);
-    
-    const delta_x_meters1 = 3.0;    
+
+    const delta_x_meters1 = 2.0;    
     const delta_y_meters1 = 5.0;    
-    const delta_x_meters2 = 5.0;    
+    const delta_x_meters2 = 3.0;    
     const delta_y_meters2 = 3.0;    
 
-    //const long_delta_rad = delta_x_meters / height;
-    //const lat_delta_rad  = delta_y_meters / height;
-
-    //const x_delta_rad = 0;
-    //const y_delta_rad = 0;
     const x_delta_rad1 = delta_x_meters1 / z_height;
     const y_delta_rad1 = delta_y_meters1 / z_height;
     const x_delta_rad2 = delta_x_meters2 / z_height;
     const y_delta_rad2 = delta_y_meters2 / z_height;
-    
-    //console.log(`delta_rad (x,y) = (${x_delta_rad},${x_delta_rad})`);
+
+    const delta_rads = [
+	{ x: -x_delta_rad2, y: y_delta_rad2 },
+	{ x: -x_delta_rad1, y: y_delta_rad1 },
+	{ x:             0, y:            0 },
+	{ x:  x_delta_rad1, y: y_delta_rad1 },
+	{ x:  x_delta_rad2, y: y_delta_rad2 }
+    ]
+
     
     // Define key dimensions of array, in metres
     const arrowBodyLength = 20.0; 
@@ -637,22 +900,22 @@ async function createPathEntity() {
     const arrowTipLength  = 10.0;
     
 
-  let arrowPositions = [
-      new Cesium.Cartesian3(-arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-left
-      new Cesium.Cartesian3( arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-right
-      new Cesium.Cartesian3( arrowBodyWidth/2,                   -arrowBodyLength/2, 0),  // Body Top-right
-      new Cesium.Cartesian3( arrowBodyWidth/2 + arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-right
-      new Cesium.Cartesian3(                                 0,  -(arrowBodyLength/2 + arrowTipLength), 0),  // Arrowhead Apex
-      new Cesium.Cartesian3(-arrowBodyWidth/2 - arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-left
-      new Cesium.Cartesian3(-arrowBodyWidth/2,                   -arrowBodyLength/2, 0)   // Body Top-left
-  ];
-
-  for (let arrowPosition of arrowPositions) {
+    let arrowPositions = [
+	new Cesium.Cartesian3(-arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-left
+	new Cesium.Cartesian3( arrowBodyWidth/2,                    arrowBodyLength/2, 0),  // Body Bottom-right
+	new Cesium.Cartesian3( arrowBodyWidth/2,                   -arrowBodyLength/2, 0),  // Body Top-right
+	new Cesium.Cartesian3( arrowBodyWidth/2 + arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-right
+	new Cesium.Cartesian3(                                 0,  -(arrowBodyLength/2 + arrowTipLength), 0),  // Arrowhead Apex
+	new Cesium.Cartesian3(-arrowBodyWidth/2 - arrowTipFlange,  -arrowBodyLength/2,                    0),  // Arrowhead Top-left
+	new Cesium.Cartesian3(-arrowBodyWidth/2,                   -arrowBodyLength/2, 0)   // Body Top-left
+    ];
+    
+    for (let arrowPosition of arrowPositions) {
 	arrowPosition.x += current_city_starting_coord_xyz.x;
 	arrowPosition.y += current_city_starting_coord_xyz.y;
 	arrowPosition.z += current_city_starting_coord_xyz.z;
-  }
-
+    }
+    
     const boxes = [ 
 	{
 	    dimensions : new Cesium.Cartesian3( 3, 1, 1),
@@ -661,7 +924,7 @@ async function createPathEntity() {
 	    //outlineColor : Cesium.Color.YELLOW
 	},
 	{
-	    dimensions : new Cesium.Cartesian3( 8, 2, 1),
+	    dimensions : new Cesium.Cartesian3( 8, 1, 1),
 	    material : Cesium.Color.WHITE,
 	    //outline : true,
 	    //outlineColor : Cesium.Color.YELLOW
@@ -673,7 +936,7 @@ async function createPathEntity() {
 	    //outlineColor : Cesium.Color.YELLOW
 	},
 	{
-	    dimensions : new Cesium.Cartesian3( 8, 2, 1),
+	    dimensions : new Cesium.Cartesian3( 8, 1, 1),
 	    material : Cesium.Color.WHITE,
 	    //outline : true,
 	    //outlineColor : Cesium.Color.YELLOW
@@ -685,6 +948,13 @@ async function createPathEntity() {
 	    //outlineColor : Cesium.Color.YELLOW
 	}
     ];
+
+    const current_city_starting_cartographic_rad = Cesium.Cartographic.fromCartesian(current_city_starting_coord_xyz);
+    const long_rad = current_city_starting_cartographic_rad.longitude;
+    const lat_rad  = current_city_starting_cartographic_rad.latitude;
+    const height   = current_city_starting_cartographic_rad.height;
+
+    /*
     const positions = [
 	new Cesium.Cartesian3.fromRadians(long_rad+y_delta_rad2,    lat_rad-x_delta_rad2, height),
 	new Cesium.Cartesian3.fromRadians(long_rad+y_delta_rad1,    lat_rad-x_delta_rad1, height),
@@ -694,6 +964,7 @@ async function createPathEntity() {
     ];
 
     console.log("**** positions: ", JSON.stringify(positions));
+    */
     
     /*
     const deltas = [
@@ -705,13 +976,20 @@ async function createPathEntity() {
     
 
     for (let i=0; i<boxes.length; i++) {
+
+	if (i != 2) { continue; }
+	
 	const box = boxes[i];
 	//const delta = deltas[i];
 
 	//let position = new Cesium.Cartesian3();
 	//Cesium.Cartesian3.add(current_city_starting_coord_xyz,delta,position);
 
-	const position = positions[i];
+	//const position = positions[i];
+
+	const delta_rad = delta_rads[i];
+	const position = new Cesium.Cartesian3.fromRadians(long_rad+delta_rad.y, lat_rad+delta_rad.x, height);
+
 	console.log(`**** position[${i}] = `, position);
 	const pathEntity = viewer.entities.add({ 
 	    name: "Path Entity",
@@ -762,7 +1040,7 @@ async function createPathEntity() {
 
 	//console.log("LOG: Entity created at", new Date().toISOString());
 
-	//await animatePath(pathEntity,position,positionPathPointArray,delta);
+	await animatePathMultiBoxes(pathEntity,position,positionPathPointArray,delta_rad, current_city_starting_coord_xyz,positionPathPointArray);
 
     }
     
