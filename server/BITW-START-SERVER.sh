@@ -29,8 +29,8 @@ else
 	echo "===="
 	echo "Warning: Newer source files detected in '$client_dir/{public,src}' than in '$build_dir'"
 	echo ""
-	echo "To operate BITW, either regeneate the client build directory or else"
-	echo "run the client's developer mode server"
+	echo "To operate BITW in production mode, either regeneate the client build directory"
+	echo "or else run the client's developer mode server"
 	echo "===="
     fi
 fi
