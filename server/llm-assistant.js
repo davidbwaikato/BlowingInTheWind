@@ -1,23 +1,24 @@
 const { v4: uuid } = require('uuid');
 
 const { ChatPromptTemplate, MessagesPlaceholder } = require("@langchain/core/prompts");
-//import { JsonOutputParser } from "@langchain/core/output_parsers";
 const { JsonOutputParser } = require("@langchain/core/output_parsers");
 const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { START, END, Annotation, MemorySaver, MessagesAnnotation, StateGraph } = require("@langchain/langgraph");
 const { ChatOpenAI } = require('@langchain/openai');
 
-// Initialize the LLM
+// For background details on how to work with langchain in JavaScript see:
+//    https://js.langchain.com/docs/tutorials/chatbot/
 
 const llm = new ChatOpenAI({
-  //model: "gpt-4o-mini",
-  model: "gpt-4o",
-  temperature: 0
+    //model: "gpt-4o-mini",
+    model: "gpt-4o",
+    temperature: 0.5
 });
 
+// **** change this to be per RoomID
 const llm_config = { configurable: { thread_id: uuid() } };
 
-// Siimple example of using OpenAI LLM/Chatbot with a one-shot question
+// (1) Simple example of using LangChain to contact OpenAI LLM/Chatbot with a one-shot question
 const getLLMResponseOneShot = async function(prompt_message)
 {
     const output = await llm.invoke([{
@@ -28,15 +29,19 @@ const getLLMResponseOneShot = async function(prompt_message)
     return output;
 };
 
+// (2) The following 'chain' starts with a hard-wired base system, and
+// then expects the provided prompt to name the city (and country) for the hints
+// This code pattern closely follows the LangChain example
+
 const prompt_city_by_city = ChatPromptTemplate.fromMessages([
     [
 	"system",
-	"You are to provide 10 hints about a given city.  Return your answers in JSON format,",
+	"You are to provide 10 hints about a given city.",
     ],
     new MessagesPlaceholder("messages"),
 ]);
 
-// Define the function that calls the model for English prompt
+// Define the function that calls the model for city-by-city prompt
 const callModelCBC = async (state) => {
     const chain = prompt_city_by_city.pipe(llm);
     const response = await chain.invoke(state);
@@ -70,8 +75,14 @@ const getLLMHintLondon = async function() {
     return output_last_message
 };
 
+// (3) This 'chain' is tailored to what is needed in BITW.  It follows the
+// parameterised version of a 'chain' in the LangChain docs, but -- rather
+// than returning the raw LLM message -- it crafts a JSON reponse of hints
+// that can be directly accessed
+
 
 // Parameterized city (and country) prompt
+
 const prompt_param_city = ChatPromptTemplate.fromMessages([
     [
 	"system",
@@ -96,13 +107,9 @@ const json_parser = new JsonOutputParser();
 // Define the function that calls the model with parameterized city and country
 const callModelParamCity = async (state) => {
     const chain = prompt_param_city.pipe(llm);
-    //const chain = prompt_param_city.pipe(llm).pipe(json_parser);
     const response = await chain.invoke(state);
 
-    console.log("**** callModelParamCity: ", response);
-    
     return { messages: [response] };
-    //return response;
 };
 
 // Define a new graph for parameterized city and country
@@ -127,16 +134,10 @@ const getLLMHint = async function(city,country) {
     };
 
     const output = await appParamCity.invoke(input, llm_config);
-    console.log("**** output", output);
 
     const output_last_message = output.messages[output.messages.length - 1]?.content;
     const output_json = await json_parser.parse(output_last_message);
-    
-    //const output_last_message = output;
-    console.log(output_last_message);
-    console.log(output_json);
-    
-    //return output_last_message;
+
     return output_json;
 };
 
