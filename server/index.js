@@ -7,10 +7,12 @@ const cors    = require("cors");
 
 const {Server} = require("socket.io");
 
+const llmAssistant = require("./llm-assistant");
+
 var serveindex = require('serve-index')
 
-//import { ChatOpenAI } from "@langchain/openai";
-const { ChatOpenAI } = require("@langchain/openai");
+////import { ChatOpenAI } from "@langchain/openai";
+//const { ChatOpenAI } = require("@langchain/openai");
 
 const SERVER_PORT = process.env.BITW_SERVER_PORT || 3001;
 const CLIENT_URL  = process.env.BITW_CLIENT_URL || "http://localhost:3001";
@@ -366,74 +368,35 @@ app.get('/get-audio-background-playlist', (req, res) => {
 })
 
 
+app.get('/chatgpt-simple-test', async (req,res) => {
 
-//import { v4 as uuidv4 } from "uuid";
-//const { v4 as uuidv4 } = require("uuid");
-const { v4: uuid } = require('uuid');
+    const message_response = await llmAssistant.getLLMResponseOneShot("What is the capital of England?");    
+    const message_response_str = JSON.stringify(message_response);
 
-const llm = new ChatOpenAI({
-    model: "gpt-4o-mini",
-    temperature: 0
-});
+    res.setHeader("Content-Type", "application/json");    
+    res.end(message_response_str);
 
-
-const { ChatPromptTemplate, MessagesPlaceholder } = require("@langchain/core/prompts");
-const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
-const { getBufferString } = require('@langchain/core/messages');
-
-const {
-    START,
-    END,
-    StateGraph,
-    MemorySaver,
-    MessagesAnnotation,
-    Annotation
-} = require("@langchain/langgraph");
-
-
-app.get('/chatgpt-simple', async (req,res) => {
-
+    /*
     const output = await llm.invoke([{ role: "user", content: "Hi im bob" }]);
     
     res.setHeader("Content-Type", "application/json");
     
     res.end(JSON.stringify(output));
+    */
+    
 })
 
 
-const prompt = ChatPromptTemplate.fromMessages([
-    [
-	"system",
-	"You talk like a pirate. Answer all questions to the best of your ability.",
-    ],
-    new MessagesPlaceholder("messages"),
-]);
 
+app.get('/get-llm-hint-london', async (req,res) => {
 
-// Define the function that calls the model
-//const callModel2 = async (state: typeof MessagesAnnotation.State) => {
-const callModel2 = async (state) => {
-    const chain = prompt.pipe(llm);
-    const response = await chain.invoke(state);
-    // Update message history with response:
-    return { messages: [response] };
-};
+    const message_response = await llmAssistant.getLLMHintLondon();
+    const message_response_str = JSON.stringify(message_response);
 
-// Define a new graph
-const workflow2 = new StateGraph(MessagesAnnotation)
-  // Define the (single) node in the graph
-  .addNode("model", callModel2)
-  .addEdge(START, "model")
-  .addEdge("model", END);
+    res.setHeader("Content-Type", "application/json");    
+    res.end(message_response_str);
 
-// Add memory
-const app2 = workflow2.compile({ checkpointer: new MemorySaver() });
-const config_simple_pipe = { configurable: { thread_id: uuid() } };
-
-
-
-app.get('/chatgpt-simple-pipe', async (req,res) => {
-
+    /*
     const messages_input = [
 	{
 	    role: "user",
@@ -448,44 +411,18 @@ app.get('/chatgpt-simple-pipe', async (req,res) => {
 
     res.setHeader("Content-Type", "application/json");    
     res.end(output_response_str);
-
+    */
 })
 
 
-// Look to parameterize 'language'
+app.get('/get-llm-hint', async (req,res) => {
+    const message_response = await llmAssistant.getLLMHint("london","England");
+    const message_response_str = JSON.stringify(message_response);
 
-const prompt_param_lang = ChatPromptTemplate.fromMessages([
-  [
-    "system",
-    "You are a helpful assistant. Answer all questions to the best of your ability in {language}.",
-  ],
-  new MessagesPlaceholder("messages"),
-]);
+    res.setHeader("Content-Type", "application/json");    
+    res.end(message_response_str);
 
-
-// Define the State
-const GraphAnnotationParamLang = Annotation.Root({
-  ...MessagesAnnotation.spec,
-  language: new Annotation(),
-});
-
-// Define the function that calls the model
-const callModelParamLang = async (state) => { // typeof GraphAnnotationParamLang.State
-    const chain = prompt_param_lang.pipe(llm);
-    const response = await chain.invoke(state);
-    return { messages: [response] };
-};
-
-const workflowParamLang = new StateGraph(GraphAnnotationParamLang)
-  .addNode("model", callModelParamLang)
-  .addEdge(START, "model")
-  .addEdge("model", END);
-
-const appParamLang = workflowParamLang.compile({ checkpointer: new MemorySaver() });
-const configParamLang = { configurable: { thread_id: uuid() } };
-
-app.get('/chatgpt', async (req,res) => {
-
+    /*
     // new HumanMessage("Hi! I'm bob"),
     const input = {
 	messages: [
@@ -508,8 +445,10 @@ app.get('/chatgpt', async (req,res) => {
     
     res.setHeader("Content-Type", "application/json");    
     res.end(output_response_str);
-
+    */
+    
 })
+
 
 server.listen(SERVER_PORT, ()=> {
     console.log(`Web + Socket.IO server running on port ${SERVER_PORT}`);
