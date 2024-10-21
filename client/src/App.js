@@ -15,8 +15,8 @@ function App() {
     if (username !== "" && room !== "") {
 	console.log("**** away to socket.emit('join_room') with socket: ", bitw_socket);
 	bitw_socket.emit("join_room", room);
-	//console.log("**** Away to call window.joinRoom().  This seems to duplicate the socket.emit('join_room') call");
-	//window.joinRoom(room);
+	window.bitws_setRoomId(room);
+	
 	setShowChat(true);
     }
   };

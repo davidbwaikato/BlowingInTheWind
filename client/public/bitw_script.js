@@ -9,28 +9,11 @@ Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 /*********************************
  * Get connect to WebSocket Server
  *********************************/
-//import socket from './SocketInstance.js';
 
-/*
-const SERVER_URL  = config.SERVER_URL
-
-const ws_socket_url = `${SERVER_URL}`
-console.log(`Creating connection to Web-Socket server: ${ws_socket_url}`)
-
-const socket = io(ws_socket_url);
-console.log("**** bitw_scripts.js global init time, bitw_socket = ", window.bitw_socket);
-*/
-
-//const socket = window.bitw_socket;
-//console.log("**** bitw_scripts.js socket = ", socket);
+let bitw_socket = null;
+let bitw_roomId = null;
 
 window.bitws_registerSocketOn = function(socket) {
-    /*
-    window.joinRoom = function(room){
-	//console.log("**** window.joinRoom() bitw_socket = ", window.bitw_socket);
-	socket.emit("join_room", room);
-    }
-*/
 
     socket.on("city_data", (data) => {
 	console.log("socket.on('city_data') data:", data)
@@ -45,17 +28,19 @@ window.bitws_registerSocketOn = function(socket) {
 	teleportToCurrentCity();
     });
 
-    /*
-    socket.on("country_hint", (data_hint) => {
-	console.log("socket.on('country_hint') data:", data_hint)
-    });
+    socket.on("start_animation", (data_speed) => {
+	console.log("socket.on('start_animation'): ", data_speed)
 
-    socket.on("city_hint", (data_hint) => {
-	console.log("socket.on('city_hint') data:", data_hint)
+	viewer.clockViewModel.shouldAnimate = true
+	viewer.clock.multiplier = (data_speed) ? data_speed : 1.0;	
     });
-*/
+    
 }
 
+window.bitws_setRoomId = function(roomId) {
+    bitw_roomId = roomId;
+}
+    
 
 /*********************************
  * Cesium/Ballon Setup
@@ -77,6 +62,8 @@ let BalloonSurrogateEntity = null;
 let BuildingTileSet = null;
 
 window.bitws_initStartingLocation = function(socket) {
+
+    bitw_socket = socket;
     
     if (viewer != null) {
 	// Retrieve default starting position from server, and dreate (surrogate) balloon entity at that position
@@ -1241,13 +1228,17 @@ if (viewer != null) {
 	    viewer.trackedEntity = BalloonSurrogateEntity;	    
 	}
     });
-
+	
     // On Pause/Play event
     Cesium.knockout.getObservable(viewer.animation.viewModel.clockViewModel, 'shouldAnimate')
-	.subscribe(function(value) {
-	    // If paused
-	    if (!value) {
-		// Revert camera back to normal
+	.subscribe(function(shouldAnimate) {
+	    if (shouldAnimate) {
+		// Tell the server to initiate 'start_animation' for all players in this room
+		console.log("**** bitw_socket.emit('start_animation_in_room')", bitw_roomId, viewer.clock.multiplier);
+		bitw_socket.emit('start_animation_in_room', bitw_roomId, viewer.clock.multiplier);
+	    }
+	    else {
+		// Viewer is being paused => revert camera back to normal
 		viewer.zoomTo(BalloonSurrogateEntity, cameraOffset);
 	    }
 	});
@@ -1255,7 +1246,7 @@ if (viewer != null) {
 
 
 // https://stackoverflow.com/questions/979975/get-the-values-from-the-get-parameters-javascript
-function joinRoomShortcut()
+function joinRoomShortcutUNUSED()
 {
     const join_name = window.location.searchParams.get("name");
     const join_room = window.location.searchParams.get("room");
