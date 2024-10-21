@@ -1,4 +1,3 @@
-const fs      = require('fs');
 const path    = require('path');
 
 const express = require("express");
@@ -7,12 +6,12 @@ const cors    = require("cors");
 
 const {Server} = require("socket.io");
 
-const llmAssistant = require("./llm-assistant");
+const utils         = require("./utils");
+const llmAssistant  = require("./llm-assistant");
+const audioPlaylist = require("./audio-playlist");
 
 var serveindex = require('serve-index')
 
-////import { ChatOpenAI } from "@langchain/openai";
-//const { ChatOpenAI } = require("@langchain/openai");
 
 const SERVER_PORT = process.env.BITW_SERVER_PORT || 3001;
 const CLIENT_URL  = process.env.BITW_CLIENT_URL || "http://localhost:3001";
@@ -64,32 +63,33 @@ const DefaultStartingLocation = {
     coordinates: [ 175.3175556, -37.7884167, 100.0]    // A lower altitude works better of the default starting location
 };
 
+const HintDelayMsecs = 10* 1000;
 
 const CitiesArray = [
-    { city: "Auckland", coordinates: [174.763336, -36.848461, 300.0]},
-    { city: "Rome", coordinates: [12.496366, 41.902782, 300.0]},
-    { city: "Paris", coordinates: [2.349014, 48.864716, 300.0]},
-    { city: "Tokyo", coordinates: [139.817413, 35.672855, 300.0]},
-    //{ city: "Dubai", coordinates: [55.296249, 25.276987, 300.0]},
-    { city: "Hamilton", coordinates: [175.269363, -37.781528, 300.0]},
-    { city: "Toronto", coordinates: [-79.384293, 43.653908, 300.0]},
-    { city: "Sydney", coordinates: [151.209900, -33.865143, 300.0]},
-    { city: "San Francisco", coordinates: [-122.431297, 37.773972, 300.0]},
-    { city: "New York", coordinates: [-73.935242, 40.730610, 300.0]},
-    //{ city: "Seoul", coordinates: [127.024612, 37.532600, 300.0]},
-    //{ city: "New Delhi", coordinates: [77.216721, 28.644800, 300.0]},
-    { city: "Barcelona", coordinates: [2.154007, 41.390205, 300.0]},
-    { city: "Athens", coordinates: [23.727539, 37.983810, 300.0]},
-    { city: "Budapest", coordinates: [19.040236, 47.497913, 300.0]},
-    //{ city: "Moscow", coordinates: [37.618423, 55.751244, 300.0]},
-    //{ city: "Cairo", coordinates: [31.233334, 30.033333, 300.0]},
-    { city: "Copenhagen", coordinates: [12.568337, 55.676098, 300.0]},
-    { city: "London", coordinates: [-0.118092, 51.509865, 300.0]},
+    { city: "Auckland",      country: "New Zealand", coordinates: [ 174.763336,  -36.848461, 300.0]},
+    { city: "Rome",          country: "Italy",       coordinates: [  12.496366,   41.902782, 300.0]},
+    { city: "Paris",         country: "France",      coordinates: [   2.349014,   48.864716, 300.0]},
+    { city: "Tokyo",         country: "Japan",       coordinates: [ 139.817413,   35.672855, 300.0]},
+    //{ city: "Dubai",         country: "",            coordinates: [  55.296249,   25.276987, 300.0]},
+    { city: "Hamilton",      country: "New Zealand", coordinates: [ 175.269363,  -37.781528, 300.0]},
+    { city: "Toronto",       country: "Canada",      coordinates: [ -79.384293,   43.653908, 300.0]},
+    { city: "Sydney",        country: "Australia",   coordinates: [ 151.209900,  -33.865143, 300.0]},
+    { city: "San Francisco", country: "USA",         coordinates: [-122.431297,   37.773972, 300.0]},
+    { city: "New York",      country: "USA",         coordinates: [ -73.935242,   40.730610, 300.0]},
+    //{ city: "Seoul",         country: "South Korea", coordinates: [ 127.024612,   37.532600, 300.0]},
+    //{ city: "New Delhi",     country: "India",       coordinates: [  77.216721,   28.644800, 300.0]},
+    { city: "Barcelona",     country: "Spain",       coordinates: [   2.154007,   41.390205, 300.0]},
+    { city: "Athens",        country: "Greece",      coordinates: [  23.727539,   37.983810, 300.0]},
+    { city: "Budapest",      country: "Hungary",     coordinates: [  19.040236,   47.497913, 300.0]},
+    //{ city: "Moscow",        country: "Russia",      coordinates: [  37.618423,   55.751244, 300.0]},
+    //{ city: "Cairo",         country: "Egypt",       coordinates: [  31.233334,   30.033333, 300.0]},
+    { city: "Copenhagen",    country: "Denmark",     coordinates: [  12.568337,   55.676098, 300.0]},
+    { city: "London",        country: "England",     coordinates: [  -0.118092,   51.509865, 300.0]},
 ] 
 
 // Method for shuffling an array
 //   https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
-
+/*
 function shuffleArray(array){
     let currentIndex = array.length;
     while(currentIndex != 0){
@@ -99,21 +99,92 @@ function shuffleArray(array){
         [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
     }
 }
+*/
 
 // shuffle cities array
 let shuffledCitiesArray = [...CitiesArray]
-shuffleArray(shuffledCitiesArray);
+utils.shuffleArray(shuffledCitiesArray);
 
 // initialise necessary objects
 let allPlayers = {};
+
 let cityForEachRoom = {};
+let hintsForEachRoom = {};
+
 let cityIndex = 0; 
+
+function getTimeStamp()
+{
+    const date_now = new Date();
+    const hours = date_now.getHours();
+    const mins  = date_now.getMinutes();
+    
+    const time_str = hours + ":" + String(mins).padStart(2,"0");
+
+    return time_str;
+}
+
+
+function createMessageTemplate(roomId)
+{
+    const time_str = getTimeStamp();
+				   
+    let message_template = {
+        room: roomId,
+        author: 'BITW Assistant',
+        message: null,
+	time: time_str
+    };
+
+    return message_template;
+}
+
+function giveNextHint(roomId)
+{
+    console.log("**** giveNextHint() from roomId: " + roomId);
+    
+    const roomHints = hintsForEachRoom[roomId];
+    
+    const countryIndex = roomHints.countryIndex;
+    const cityIndex    = roomHints.cityIndex;
+    
+    if (countryIndex < roomHints['country-hints'].length) {
+	const country_hint = roomHints['country-hints'][countryIndex];	
+	const countdown = roomHints['country-hints'].length - countryIndex;
+	
+	let message = createMessageTemplate(roomId);
+	message.message = `Country Hint #${countdown}: ` + country_hint;
+        io.in(roomId).emit("receive_message", message);
+	
+	roomHints.countryIndex = countryIndex+ 1;
+    }
+    else if (cityIndex < roomHints['city-hints'].length) {
+	const city_hint = roomHints['city-hints'][cityIndex];
+	const countdown = roomHints['city-hints'].length - cityIndex;
+
+	let hint_message = createMessageTemplate(roomId);
+	hint_message.message = `City Hint #${countdown}: ` + city_hint;
+        io.in(roomId).emit("receive_message", hint_message);
+	
+	roomHints.cityIndex = cityIndex+ 1;
+    }
+    else {
+	console.log("Time to send the anagram/word jumble");
+    }
+}
+
+function startTimerBasedHints(roomId)
+{
+    const timer_id = setInterval(giveNextHint,HintDelayMsecs,roomId);
+
+    return timer_id;
+}
 
 //listen a connection  event from client
 //socket is specific to a client  
 io.on("connection", (socket) => {
     console.log(`user connected ${socket.id}`);
-    let city = [];
+    //let city = []; // ****
 
     socket.on("get_starting_location", (callback) => {
 	callback = typeof callback == "function" ? callback : () => {};
@@ -138,18 +209,41 @@ io.on("connection", (socket) => {
         }
 
         if (!cityForEachRoom[roomIdData]) {
-            if(cityIndex >= shuffledCitiesArray.length){ // **** changed to >=
+	    // First user joining this particular room
+            if(cityIndex >= shuffledCitiesArray.length){ 
+		// run out of new city details to issue from the global list
+		// => wrap around to beginning issue that one
                 cityIndex = 0;
-            } else {
+            }
+	    else {
+		// => store the city details under the roomIdData, and increment counter
                 cityForEachRoom[roomIdData] = shuffledCitiesArray[cityIndex];
                 cityIndex++;    
             }
-        }
-        city = cityForEachRoom[roomIdData];
-        const cityData = cityForEachRoom[roomIdData];
-        console.log(`Sending city data to room ${roomIdData}`, cityData);
-        io.to(roomIdData).emit("city_data", cityData);
 
+            const cityData_for_hints = cityForEachRoom[roomIdData];
+	    console.log("**** cityData_for_hints = ", cityData_for_hints);
+	    
+	    llmAssistant.getLLMHint(cityData_for_hints.name,cityData_for_hints.country, function(hintsJSON) {
+		// contains two fields: 'country-hints' and 'city-hints'
+		hintsJSON.countryIndex = 0;
+		hintsJSON.cityIndex = 0;
+		
+		hintsForEachRoom[roomIdData] = hintsJSON;
+		console.log("***** away to start timer based hints");
+		hintsJSON.timerId = startTimerBasedHints(roomIdData);
+	    });
+	    
+        }
+	
+        //city = cityForEachRoom[roomIdData]; // ****
+        const cityData = cityForEachRoom[roomIdData];
+        //console.log(`Sending city data to room ${roomIdData}`, cityData);
+        //io.to(roomIdData).emit("city_data", cityData);
+
+	console.log(`Sending city data to newly joined user ${socket.id}: `, cityData);
+	socket.emit("city_data",cityData);
+	
         // initialise the cityFotEachRoom object so that each room gets a different city
         console.log(`User with ID ${socket.id} joined room: ${roomIdData}`);
         console.log(`User ${socket.id} score: ${allPlayers[socket.id].score}`);
@@ -162,19 +256,23 @@ io.on("connection", (socket) => {
         let currentCity = cityForEachRoom[data.room].city;
         let player = allPlayers[socket.id];
 
-	const date_now = new Date();
-	const hours = date_now.getHours();
-	const mins  = date_now.getMinutes();
+	// *****
+	//const date_now = new Date();
+	//const hours = date_now.getHours();
+	//const mins  = date_now.getMinutes();
 	
-	const time_str = hours + ":" + String(mins).padStart(2,"0");
+	//const time_str = getTimeStamp();
 				   
-        let correctMsg = {
-            room: data.room,
-            author: 'BITW Assistant',
-            message: `${data.author} guessed correctly!`,
-	    time: time_str
-        };
+        //let correctMsg = {
+        //    room: data.room,
+        //    author: 'BITW Assistant',
+        //    message: `${data.author} guessed correctly!`,
+	//    time: time_str
+        //};
 
+	let correctMsg = createMessageTemplate(data.room);
+	correctMsg.message = `${data.author} guessed correctly!`;
+		
         // check if the player's guess already exists in their set
 	console.log("**** player: ", player);
 	console.log("**** data: ", data);
@@ -221,7 +319,8 @@ io.on("connection", (socket) => {
                 //if (isCorrectCount == Math.ceil(allRooms[data.room].count)) { // ****
 		if (isCorrectCount == num_in_room) { // ****
                     // if the cityIndex is more than or equal to the length of the cities array
-                    if (cityIndex >= shuffledCitiesArray.length){
+                    if (cityIndex >= shuffledCitiesArray.length) {
+			// Or is this a condition that should signal the end of the game?? // ****
                         // set index back to the first city
                         cityIndex = 0;
                     }
@@ -293,67 +392,13 @@ io.on("connection", (socket) => {
     }
 });
 
-function readdir_mp3_filelist(mp3_directory)
-{
-    // Default is for there to be no files listed
-    let returnJSON = { "status": null, "mp3-filelist": [] };
-    
-    let mp3_files = []
-
-    const audio_mp3_dir = path.join('audio',mp3_directory)    
-    const full_mp3_directory = path.join(FullBuildDirectory,audio_mp3_dir)
-
-    try {
-
-	//if (!fs.lstatSync(full_mp3_directory).isDirectory()) {
-	if (!fs.existsSync(full_mp3_directory)) {
-	    const warn_message = "Warning: Failed to find directory: "
-		  + full_mp3_directory + "\n"
-	          + "No music tracks will be available to be played while playing ${BITW_APP_NAME}";
-	    console.warn(warn_message);
-	    
-	    returnJSON['warning']  = `Failed to find '${mp3_directory}'.  No music tracks will be played while playing ${BITW_APP_NAME}`;
-	}
-	else {
-	    let files = fs.readdirSync(full_mp3_directory,"utf8");
-	    
-	    files.forEach(function (file) {
-		let full_mp3_file = path.join(full_mp3_directory, file);
-		
-		if (file.endsWith(".mp3")) {
-		    const file_url = encodeURI(file);
-		    mp3_files.push(file_url);
-		}
-	    });
-
-	    shuffleArray(mp3_files);
-	    
-	    returnJSON['url-path-prefix'] = "/"+audio_mp3_dir;	    
-	    returnJSON['mp3-filelist'] = mp3_files;
-	}
-	
-	returnJSON['status'] = "ok";
-    }
-    catch (err) {
-	const err_message = "Failed to read directory: " + full_mp3_directory;
-	
-	console.error(err_message);
-	console.error();
-	console.error(err);
-
-	returnJSON['status'] ="failed";
-	returnJSON['error']  = `Failed to read directory '${mp3_directory}'`;
-    }
-
-    return returnJSON;
-}
     
 
 app.get('/get-audio-music-playlist', (req, res) => {
 
     res.setHeader("Content-Type", "application/json");
 
-    mp3_filelist_rec = readdir_mp3_filelist("weather-playlist");
+    mp3_filelist_rec = audioPlaylist.readMP3Filelist(FullBuildDirectory,"weather-playlist");
     
     res.end(JSON.stringify(mp3_filelist_rec));
 })
@@ -362,7 +407,7 @@ app.get('/get-audio-background-playlist', (req, res) => {
 
     res.setHeader("Content-Type", "application/json");
 
-    mp3_filelist_rec = readdir_mp3_filelist("ambient-background");
+    mp3_filelist_rec = audioPlaylist.readMP3Filelist(FullBuildDirectory,"ambient-background");
     
     res.end(JSON.stringify(mp3_filelist_rec));
 })
@@ -374,16 +419,7 @@ app.get('/chatgpt-simple-test', async (req,res) => {
     const message_response_str = JSON.stringify(message_response);
 
     res.setHeader("Content-Type", "application/json");    
-    res.end(message_response_str);
-
-    /*
-    const output = await llm.invoke([{ role: "user", content: "Hi im bob" }]);
-    
-    res.setHeader("Content-Type", "application/json");
-    
-    res.end(JSON.stringify(output));
-    */
-    
+    res.end(message_response_str);    
 })
 
 
@@ -395,57 +431,15 @@ app.get('/get-llm-hint-london', async (req,res) => {
 
     res.setHeader("Content-Type", "application/json");    
     res.end(message_response_str);
-
-    /*
-    const messages_input = [
-	{
-	    role: "user",
-	    content: "Hi! I'm Jim.",
-	},
-    ];
-    
-    const output = await app2.invoke({ messages: messages_input }, config_simple_pipe);
-    const output_response = output.messages[output.messages.length - 1];
-    console.log(output_response);
-    const output_response_str = JSON.stringify(output_response);
-
-    res.setHeader("Content-Type", "application/json");    
-    res.end(output_response_str);
-    */
 })
 
 
 app.get('/get-llm-hint', async (req,res) => {
-    const message_response = await llmAssistant.getLLMHint("london","England");
+    const message_response = await llmAssistant.getLLMHint(req.query.city,req.query.country);
     const message_response_str = JSON.stringify(message_response);
 
     res.setHeader("Content-Type", "application/json");    
     res.end(message_response_str);
-
-    /*
-    // new HumanMessage("Hi! I'm bob"),
-    const input = {
-	messages: [
-	    {
-		role: "user",
-		content: "Hi im bob",
-	    },
-	],
-	language: "Spanish",
-    };
-    
-    const output = await appParamLang.invoke(input, configParamLang);
-    const output_response = output.messages[output.messages.length - 1];
-    console.log(output_response);
-    //console.log(output_response.toString());
-    const output_response_str = JSON.stringify(output_response);
-    //const output_response_str = `${output_response}`;
-
-    //const output_response_str = getBufferString([output_response])
-    
-    res.setHeader("Content-Type", "application/json");    
-    res.end(output_response_str);
-    */
     
 })
 

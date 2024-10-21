@@ -44,6 +44,16 @@ window.bitws_registerSocketOn = function(socket) {
 	appendCity(city_info);    
 	teleportToCurrentCity();
     });
+
+    /*
+    socket.on("country_hint", (data_hint) => {
+	console.log("socket.on('country_hint') data:", data_hint)
+    });
+
+    socket.on("city_hint", (data_hint) => {
+	console.log("socket.on('city_hint') data:", data_hint)
+    });
+*/
 }
 
 

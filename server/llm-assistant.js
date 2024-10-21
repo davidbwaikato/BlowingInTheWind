@@ -10,9 +10,8 @@ const { ChatOpenAI } = require('@langchain/openai');
 //    https://js.langchain.com/docs/tutorials/chatbot/
 
 const llm = new ChatOpenAI({
-    //model: "gpt-4o-mini",
-    model: "gpt-4o",
-    temperature: 0.5
+    model: "gpt-4o", // "gpt-4o-mini" another option to consider
+    temperature: 0.5 // have the temperature set so it hints for the same city vary over time
 });
 
 // **** change this to be per RoomID
@@ -88,9 +87,21 @@ const prompt_param_city = ChatPromptTemplate.fromMessages([
 	"system",
 	"You are an assistant that provides hints to a user playing a geo-guessing game.\n "
 	    +"The current city the user is trying to guess is {city} in the country {country}.\n "
+	    +"You give hints both about the city and the country. "
+	    +"When giving a hint about the country, do not include a term that contains the name of the country. "
+	    +"When giving a hint about the country, do not include the name of the city that is to be guessed! "
+	    +"When giving a hint about the city, never use a term that contains the name of the city that is being guessed! "
+	    +"However, for a hint about the city, it is OK to use the name of the country the city is in. "
+	    +"When giving a hint about the city, do not provide a hint that has already been given as a country hint.\n "
+	    //+"For the very last hint given for the city, always express the hint in the form of an anagram.  Ensure the anagram has the same number of letters in it as the original city name.\n "
+	//as 'The city name is an anagram of ...' "
+	    //+"When generating an anagram, pay attention to the frequency and types of letters in the original word or phrase. Make sure the resulting anagram uses the exact same letters, in the same quantity, as the original, but rearranged in a different order.\n "
+	//+"While a fun anagram is made up of other words that have exactly the same letters, this is not a requirement for this hint.  If it is not possible to provide an word-like anagram then jumble the letters shown instead, rather than provide an anagram that does fails to include all the right letters.\n "
+	//+"Use your computational functionality to double-check that the anagram provided is an exact match with the city name.\n "
+	    //+"For the very last hint given for the city, always express the hint as a word jumbled 'The letters of the city name jumbled up are ... ' "	
 	    +"Respond with a valid JSON object. "
 	    +"The JSON object should have a field called 'country-hints' which is an array or strings.  Each value in the array provides a hint about the country, in order of hardest hint to easiest hint. There should be 5 values in the 'country-hints' field. "
-	    +"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 10 values in the 'country-hints' field.\n "
+		+"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 9 values in the 'country-hints' field.\n "
     ],
     new MessagesPlaceholder("messages"),
 ]);
@@ -121,13 +132,14 @@ const workflowParamCity = new StateGraph(GraphAnnotationParamCity)
 const appParamCity = workflowParamCity.compile({ checkpointer: new MemorySaver() });
 
 // Function to get a hint with parameterized city and country
-const getLLMHint = async function(city,country) {
+const getLLMHint = async function(city,country, callback) {
     const input = {
 	messages: [
-	    {
+	    new HumanMessage("You are to provide a set of hints about the {city} in {country}."),
+	    /*{
 		role: "user",
 		content: "You are to provide a set of hints about the {city} in {country}. "
-	    },
+	    },*/
 	],
 	city:    city    || "Hamilton",
 	country: country || "New Zealand"
@@ -138,7 +150,9 @@ const getLLMHint = async function(city,country) {
     const output_last_message = output.messages[output.messages.length - 1]?.content;
     const output_json = await json_parser.parse(output_last_message);
 
-    return output_json;
+    callback(output_json);
+    
+    //return output_json;
 };
 
 module.exports = { getLLMResponseOneShot, getLLMHintLondon, getLLMHint };
