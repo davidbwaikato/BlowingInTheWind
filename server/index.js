@@ -12,11 +12,8 @@ const audioPlaylist = require("./audio-playlist");
 
 var serveindex = require('serve-index')
 
-
 const SERVER_PORT = process.env.BITW_SERVER_PORT || 3001;
 const CLIENT_URL  = process.env.BITW_CLIENT_URL || "http://localhost:3001";
-
-BITW_APP_NAME = "BITW";
 
 const app = express();
 
@@ -87,23 +84,8 @@ const CitiesArray = [
     { city: "London",        country: "England",     coordinates: [  -0.118092,   51.509865, 300.0]},
 ] 
 
-// Method for shuffling an array
-//   https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
-/*
-function shuffleArray(array){
-    let currentIndex = array.length;
-    while(currentIndex != 0){
-        let randomIndex = Math.floor(Math.random() * currentIndex);
-        currentIndex--;
 
-        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
-    }
-}
-*/
-
-// shuffle cities array
-let shuffledCitiesArray = [...CitiesArray]
-utils.shuffleArray(shuffledCitiesArray);
+const RandomizedCitiesArray = utils.createRandomizedArray(CitiesArray);
 
 // initialise necessary objects
 let allPlayers = {};
@@ -113,35 +95,10 @@ let hintsForEachRoom = {};
 
 let cityIndex = 0; 
 
-function getTimeStamp()
-{
-    const date_now = new Date();
-    const hours = date_now.getHours();
-    const mins  = date_now.getMinutes();
-    
-    const time_str = hours + ":" + String(mins).padStart(2,"0");
-
-    return time_str;
-}
-
-
-function createMessageTemplate(roomId)
-{
-    const time_str = getTimeStamp();
-				   
-    let message_template = {
-        room: roomId,
-        author: 'BITW Assistant',
-        message: null,
-	time: time_str
-    };
-
-    return message_template;
-}
 
 function giveNextHint(roomId)
 {
-    console.log("**** giveNextHint() from roomId: " + roomId);
+    console.log("Giving next hint for roomId: " + roomId);
     
     const roomHints = hintsForEachRoom[roomId];
     
@@ -152,24 +109,40 @@ function giveNextHint(roomId)
 	const country_hint = roomHints['country-hints'][countryIndex];	
 	const countdown = roomHints['country-hints'].length - countryIndex;
 	
-	let message = createMessageTemplate(roomId);
-	message.message = `Country Hint #${countdown}: ` + country_hint;
-        io.in(roomId).emit("receive_message", message);
+	const message= (countdown>1) ? `Country Hint #${countdown}: ` + country_hint : country_hint;
+	const message_rec = utils.createMessage(roomId,message);
+        io.in(roomId).emit("receive_message", message_rec);
 	
-	roomHints.countryIndex = countryIndex+ 1;
+	roomHints.countryIndex = countryIndex + 1;
     }
     else if (cityIndex < roomHints['city-hints'].length) {
 	const city_hint = roomHints['city-hints'][cityIndex];
 	const countdown = roomHints['city-hints'].length - cityIndex;
 
-	let hint_message = createMessageTemplate(roomId);
-	hint_message.message = `City Hint #${countdown}: ` + city_hint;
-        io.in(roomId).emit("receive_message", hint_message);
+	// inc countdown by 1, to allow for final city anagram hint
+	const message= `City Hint #${countdown+1}: ` + city_hint;
+	const message_rec = utils.createMessage(roomId,message);
+        io.in(roomId).emit("receive_message", message_rec);
 	
-	roomHints.cityIndex = cityIndex+ 1;
+	roomHints.cityIndex = cityIndex + 1;
     }
     else {
-	console.log("Time to send the anagram/word jumble");
+
+	const city_chars = roomHints.city.split('');
+	
+	for (let i=city_chars.length-1; i>0; i--) {
+	    const j = Math.floor(Math.random() * (i+1));
+	    [city_chars[i], city_chars[j]] = [city_chars[j], city_chars[i]];
+	}
+
+	const jumbled_city = city_chars.join('');
+
+	const message= `The city is an anagram of '${jumbled_city} `;
+	const message_rec = utils.createMessage(roomId,message);
+        io.in(roomId).emit("receive_message", message_rec);
+
+	// Stop the timer going off
+	clearInterval(roomHints.timerId);
     }
 }
 
@@ -210,75 +183,64 @@ io.on("connection", (socket) => {
 
         if (!cityForEachRoom[roomIdData]) {
 	    // First user joining this particular room
-            if(cityIndex >= shuffledCitiesArray.length){ 
+            if(cityIndex >= RandomizedCitiesArray.length){ 
 		// run out of new city details to issue from the global list
 		// => wrap around to beginning issue that one
                 cityIndex = 0;
             }
 	    else {
 		// => store the city details under the roomIdData, and increment counter
-                cityForEachRoom[roomIdData] = shuffledCitiesArray[cityIndex];
+                cityForEachRoom[roomIdData] = RandomizedCitiesArray[cityIndex];
                 cityIndex++;    
             }
 
             const cityData_for_hints = cityForEachRoom[roomIdData];
-	    console.log("**** cityData_for_hints = ", cityData_for_hints);
+	    const hint_city = cityData_for_hints.city;
+	    const hint_country = cityData_for_hints.country;
 	    
-	    llmAssistant.getLLMHint(cityData_for_hints.name,cityData_for_hints.country, function(hintsJSON) {
-		// contains two fields: 'country-hints' and 'city-hints'
+	    llmAssistant.getLLMHint(hint_city,hint_country, function(hintsJSON) {
+		// This is the callback function
+		// When called, the argument given is the JSON data-structure returned from the LLM
+		// It contains two fields: 'country-hints' and 'city-hints', each array of strings
+
+		// Add futher fields to help with giving out hints
+		hintsJSON.city = hint_city; // needed to general anagram/character jumbled version later on
+		hintsJSON['country-hints'].push(`The location you are flying over is in the country of ${hint_country}`);
+		
 		hintsJSON.countryIndex = 0;
 		hintsJSON.cityIndex = 0;
 		
 		hintsForEachRoom[roomIdData] = hintsJSON;
-		console.log("***** away to start timer based hints");
+		console.log(`hintsJSON for [${roomIdData}]: `, hintsJSON);
 		hintsJSON.timerId = startTimerBasedHints(roomIdData);
-	    });
-	    
+	    });	    
         }
 	
-        //city = cityForEachRoom[roomIdData]; // ****
         const cityData = cityForEachRoom[roomIdData];
-        //console.log(`Sending city data to room ${roomIdData}`, cityData);
-        //io.to(roomIdData).emit("city_data", cityData);
-
 	console.log(`Sending city data to newly joined user ${socket.id}: `, cityData);
 	socket.emit("city_data",cityData);
 	
         // initialise the cityFotEachRoom object so that each room gets a different city
         console.log(`User with ID ${socket.id} joined room: ${roomIdData}`);
         console.log(`User ${socket.id} score: ${allPlayers[socket.id].score}`);
-
     });
 
-
+    socket.on("start_animation_in_room", (roomIdData, speedData) => {
+	console.log(`**** socket.on('start_animation_in_room'), roomId=${roomIdData}, speed=${speedData}`);
+        //io.to(roomIdData).emit("start_animation", speedData);	
+        io.in(roomIdData).emit("start_animation", speedData);	
+    });
+    
     //listens from the client side the send_message event
-    socket.on("send_message", (data) =>{
+    socket.on("send_message", (data) => {
         let currentCity = cityForEachRoom[data.room].city;
         let player = allPlayers[socket.id];
 
-	// *****
-	//const date_now = new Date();
-	//const hours = date_now.getHours();
-	//const mins  = date_now.getMinutes();
-	
-	//const time_str = getTimeStamp();
-				   
-        //let correctMsg = {
-        //    room: data.room,
-        //    author: 'BITW Assistant',
-        //    message: `${data.author} guessed correctly!`,
-	//    time: time_str
-        //};
-
-	let correctMsg = createMessageTemplate(data.room);
-	correctMsg.message = `${data.author} guessed correctly!`;
-		
         // check if the player's guess already exists in their set
 	console.log("**** player: ", player);
 	console.log("**** data: ", data);
         if (player.guesses.has(data.message.toLowerCase())) {
-            correctMsg.message = `${data.author} has already guessed correctly.`;
-            
+	    const correctMsg = utils.createMessage(data.room, `${data.author} has already guessed correctly.`);
             io.in(data.room).emit("receive_message", correctMsg);
         }
         else if (data.message.toLowerCase() == currentCity.toLowerCase()) {
@@ -290,6 +252,7 @@ io.on("connection", (socket) => {
             player.isCorrect = true;
 
             console.log(allPlayers);
+	    const correctMsg = utils.createMessage(data.room, `${data.author} guessed correctly!`);	    
             io.in(data.room).emit("receive_message", correctMsg);
 
             let isCorrectCount = 0;
@@ -319,14 +282,14 @@ io.on("connection", (socket) => {
                 //if (isCorrectCount == Math.ceil(allRooms[data.room].count)) { // ****
 		if (isCorrectCount == num_in_room) { // ****
                     // if the cityIndex is more than or equal to the length of the cities array
-                    if (cityIndex >= shuffledCitiesArray.length) {
+                    if (cityIndex >= RandomizedCitiesArray.length) {
 			// Or is this a condition that should signal the end of the game?? // ****
                         // set index back to the first city
                         cityIndex = 0;
                     }
                     
                     // replace the current city with the next city (cityIndex should be forward at this point)
-                    cityForEachRoom[data.room] = shuffledCitiesArray[cityIndex];
+                    cityForEachRoom[data.room] = RandomizedCitiesArray[cityIndex];
                     // increment cityIndex for the next new city
                     cityIndex++;
 

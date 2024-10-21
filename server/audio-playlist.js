@@ -19,10 +19,10 @@ const readMP3Filelist = function(full_root_dir,mp3_directory)
 	if (!fs.existsSync(full_mp3_directory)) {
 	    const warn_message = "Warning: Failed to find directory: "
 		  + full_mp3_directory + "\n"
-	          + "No music tracks will be available to be played while playing ${BITW_APP_NAME}";
+	          + "No music tracks will be available to be played while playing ${utils.APP_NAME}";
 	    console.warn(warn_message);
 	    
-	    returnJSON['warning']  = `Failed to find '${mp3_directory}'.  No music tracks will be played while playing ${BITW_APP_NAME}`;
+	    returnJSON['warning']  = `Failed to find '${mp3_directory}'.  No music tracks will be played while playing ${utils.APP_NAME}`;
 	}
 	else {
 	    let files = fs.readdirSync(full_mp3_directory,"utf8");
@@ -36,10 +36,10 @@ const readMP3Filelist = function(full_root_dir,mp3_directory)
 		}
 	    });
 
-	    utils.shuffleArray(mp3_files);
+	    const randomized_mp3_files = utils.createRandomizedArray(mp3_files);
 	    
 	    returnJSON['url-path-prefix'] = "/"+audio_mp3_dir;	    
-	    returnJSON['mp3-filelist'] = mp3_files;
+	    returnJSON['mp3-filelist'] = randomized_mp3_files;
 	}
 	
 	returnJSON['status'] = "ok";
