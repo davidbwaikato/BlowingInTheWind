@@ -13,9 +13,46 @@ Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 let bitw_socket = null;
 let bitw_roomId = null;
 
+let bit_animation_auto_started = false;
+let bitw_city_correct  = false;
+let bitw_guessed_first = false;
+
 window.bitws_registerSocketOn = function(socket) {
 
-    socket.on("city_data", (data) => {
+    socket.on("auto_start_animation", (data_speed) => {
+	console.log("socket.on('auto_start_animation'): speed =", data_speed)
+	bit_animation_auto_started = true;
+	
+	viewer.clockViewModel.shouldAnimate = true;
+	viewer.clock.multiplier = (data_speed) ? data_speed : 1.0;	
+    });
+
+    socket.on("pause_animation", () => {
+	console.log("socket.on('pause_animation'): ")
+
+	viewer.clockViewModel.shouldAnimate = false;
+    });
+    
+    socket.on("append_city_data", (data) => {
+	console.log("socket.on('append_city_data') data:", data)
+	
+	const city_name = data.city;    
+	const city_coord_xyz = Cesium.Cartesian3.fromDegrees(data.coordinates[0], data.coordinates[1], data.coordinates[2]); // convert (lat,long,height) into coord (x,y,z)
+	const city_cartographic_rad = Cesium.Cartographic.fromCartesian(city_coord_xyz); // convert (x,y,z) into (long,lat,height) with angles in radians
+	
+	const city_info = { cityName: city_name, coord_xyz: city_coord_xyz, cartographic_rad: city_cartographic_rad };
+	
+	appendCity(city_info);    
+    });
+
+    socket.on("teleport_to_city", () => {
+	console.log("socket.on('teleport_to_city')");
+	resetCountdownTimer();
+	teleportToCurrentCity();
+    });
+
+
+    socket.on("append_and_goto_city_data", (data) => {
 	console.log("socket.on('city_data') data:", data)
 	
 	const city_name = data.city;    
@@ -25,16 +62,19 @@ window.bitws_registerSocketOn = function(socket) {
 	const city_info = { cityName: city_name, coord_xyz: city_coord_xyz, cartographic_rad: city_cartographic_rad };
 	
 	appendCity(city_info);    
+	resetCountdownTimer();
 	teleportToCurrentCity();
     });
 
-    socket.on("start_animation", (data_speed) => {
-	console.log("socket.on('start_animation'): ", data_speed)
-
-	viewer.clockViewModel.shouldAnimate = true
-	viewer.clock.multiplier = (data_speed) ? data_speed : 1.0;	
+    socket.on("correct_guess", (firstToGuess) => {
+	bitw_city_correct  = true;
+	bitw_guessed_first = firstToGuess;
     });
-    
+
+    socket.on("start_timer", () => {
+	startCountdownTimer(DefaultCountdownDuration); 
+    });
+
 }
 
 window.bitws_setRoomId = function(roomId) {
@@ -125,6 +165,16 @@ try {
 	selectionIndicator: false,
     });
 
+    // Set initial view to be over the North Pole, so similar to start.html
+    viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(0.0, 90.0, 20000000),  // Center at North Pole
+        orientation: {
+            heading: Cesium.Math.toRadians(0.0),   // No rotation
+            pitch: Cesium.Math.toRadians(-90.0),   // Look directly down
+            roll: 0.0
+        }
+    });
+    
     // Set startTime to current time
     startTime = viewer.clock.currentTime;
     // Initialise nextTimeStep
@@ -181,15 +231,6 @@ function cartesianToDegrees(cartesian) {
 
     return { longitude: longitude, latitude: latitude};
 }
-
-//gets the wind data and stores it to the module level variables
-/*
-async function fetchAndStoreWind(latitude, longitude){
-    const weatherWind=  await fetchWeatherData(latitude, longitude);
-
-    return { windDirection: weatherWind.windDirection, windSpeed: weatherWind.windSpeed }
-}
-*/
 
 /*********************************
  * Location (e.g. city) based utility functions
@@ -691,6 +732,9 @@ async function getWindBlownNextPoint(originPoint) {
 async function teleportToCurrentCity()
 {
   console.log("teleportToCurrentCity()");
+  bit_animation_auto_started = false;    
+  bitw_city_correct  = false;
+  bitw_guessed_first = false;
     
   if (viewer != null) {
       // Reset position
@@ -820,17 +864,6 @@ async function createPathEntityPolygonUNUSED() {
 	    }),
 	]),
 	    
-	//position: current_city_starting_coord_xyz,
-	//position: position,
-	/*
-	    box : {
-		dimensions : new Cesium.Cartesian3(20, 6, 1),
-		material : Cesium.Color.BLUE,
-		//outline : true,
-		outlineColor : Cesium.Color.YELLOW
-	    },
-      */
-          
         polygon: {
    	    //hierarchy: new Cesium.PolygonHierarchy(rectanglePositions),
 	    hierarchy: arrowPositions,
@@ -842,8 +875,7 @@ async function createPathEntityPolygonUNUSED() {
 	    outlineWidth : 3
 	
         },
-   
-      
+         
         // path: {
         //   resolution: 1,
         //   material: new Cesium.PolylineGlowMaterialProperty({
@@ -1118,14 +1150,6 @@ function getModelMatrix(balloon, time, result) {
   return result;
 }
 
-// Following feature nolonger used
-/*
-// Generate path for the balloon
-const nextCityButton = document.getElementById("next-city");
-nextCityButton.addEventListener('click', teleportToCurrentCity);
-*/
-
-
 
 /*********************************
  * COMPASS Widget (<div>)
@@ -1172,44 +1196,63 @@ if (viewer != null) {
 let minutesText = document.getElementById("minutes");
 let secondsText = document.getElementById("seconds");
 
-function startTimer(duration) {
-    let timer_duration = duration;
-    //let minutes, seconds;  ****
+const DefaultCountdownDuration = 30; // secs
+let countdownDuration   = null;
+let countdownIntervalId = null;
 
-  setInterval(function () {
-    // Calculate time to display
-    let minutes = parseInt(timer_duration / 60, 10);
-    let seconds = parseInt(timer_duration % 60, 10);
+function resetCountdownTimer()
+{
+    clearInterval(countdownIntervalId);
+    
+    countdownDuration   = null;
+    countdownIntervalId = null;
 
+    document.getElementById("timer-container").style.visibility='hidden';
+    minutesText.style.color = '#ffffff';
+    secondsText.style.color = '#ffffff';
+}
+
+function displayCountdownTimer(duration)
+{
+    let minutes = parseInt(duration / 60, 10);
+    let seconds = parseInt(duration % 60, 10);
+	
     // Add 0 if less than 10
     minutes = minutes < 10 ? "0" + minutes : minutes;
     seconds = seconds < 10 ? "0" + seconds : seconds;
-
+    
     // Display on span
     minutesText.innerText = minutes;
-    secondsText.innerText = seconds;
-
-    // Change colour to red if timer_duration has 10 seconds left
-    if(timer_duration <= 10) {
-      minutesText.style.color = '#ff0000';
-      secondsText.style.color = '#ff0000';
-    } else {
-      minutesText.style.color = '#ffffff';
-      secondsText.style.color = '#ffffff';
-    }
-
-    // When timer ends
-    if (--timer_duration < 0) {
-      // Reset duration
-      timer_duration = duration;
-      // Call nextCity
-      //teleportToCurrentCity();
-    }
-  }, 1000);
+    secondsText.innerText = seconds;	
 }
 
-// Start 2 minute timer
-//startTimer(60 * 1);
+function startCountdownTimer(starting_duration)
+{
+    countdownDuration = starting_duration;
+    
+    document.getElementById("timer-container").style.visibility='visible';
+
+    countdownIntervalId = setInterval(function () {
+	displayCountdownTimer(countdownDuration);	
+
+	// Change colour to red if countdownDuration has 10 seconds left
+	if(countdownDuration <= 10) {
+	    minutesText.style.color = '#ff0000';
+	    secondsText.style.color = '#ff0000';
+	}
+
+	// When timer ends
+	countdownDuration--;
+	if (countdownDuration < 0) {
+	    // Reset duration
+	    resetCountdownTimer();
+	    if (bitw_guessed_first) {		
+		// if guessed first => tell server to move on to next location
+		bitw_socket.emit("move_to_next_city",bitw_roomId);
+	    }
+	}
+    }, 1000);
+}
 
 /*********************************
  * Runtime Code: Callback/Listeners
@@ -1234,12 +1277,21 @@ if (viewer != null) {
 	.subscribe(function(shouldAnimate) {
 	    if (shouldAnimate) {
 		// Tell the server to initiate 'start_animation' for all players in this room
-		console.log("**** bitw_socket.emit('start_animation_in_room')", bitw_roomId, viewer.clock.multiplier);
-		bitw_socket.emit('start_animation_in_room', bitw_roomId, viewer.clock.multiplier);
+		if (bit_animation_auto_started) {
+		    // consume the 'auto-started'
+		    bit_animation_auto_started = false;
+		}
+		else {
+		    // 'bit_animation_auto_started' state means this was generated by manual/user click
+		    console.log("**** bitw_socket.emit('start_animation_in_room')", bitw_roomId, viewer.clock.multiplier);
+		    bitw_socket.emit('start_animation_in_room', bitw_roomId, viewer.clock.multiplier);
+		}
 	    }
 	    else {
 		// Viewer is being paused => revert camera back to normal
 		viewer.zoomTo(BalloonSurrogateEntity, cameraOffset);
+		// consume the 'auto-started'
+		bit_animation_auto_started = false;		
 	    }
 	});
 }

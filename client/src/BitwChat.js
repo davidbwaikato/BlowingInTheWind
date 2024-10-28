@@ -288,7 +288,7 @@ function BitwChat({socket, username, room}) {
             <div className="chat-footer">
                 <input type = "text" 
                 value = {currentMessage}
-                placeholder = "Type your guess here..."
+                placeholder = "Chat or guess the city here..."
                  onChange={(event) => {
                     setCurrentMessage(event.target.value);
                    }}
