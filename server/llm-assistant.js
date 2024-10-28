@@ -11,7 +11,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 
 const llm = new ChatOpenAI({
     model: "gpt-4o", // "gpt-4o-mini" another option to consider
-    temperature: 0.5 // have the temperature set so it hints for the same city vary over time
+    temperature: 0.75 // have the temperature set so, if played again, the hints for a city vary over time
 });
 
 // **** change this to be per RoomID
@@ -100,8 +100,10 @@ const prompt_param_city = ChatPromptTemplate.fromMessages([
 	//+"Use your computational functionality to double-check that the anagram provided is an exact match with the city name.\n "
 	    //+"For the very last hint given for the city, always express the hint as a word jumbled 'The letters of the city name jumbled up are ... ' "	
 	    +"Respond with a valid JSON object. "
-	    +"The JSON object should have a field called 'country-hints' which is an array or strings.  Each value in the array provides a hint about the country, in order of hardest hint to easiest hint. There should be 4 values in the 'country-hints' field. "
-		+"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 9 values in the 'country-hints' field.\n "
+	    //+"The JSON object should have a field called 'country-hints' which is an array or strings.  Each value in the array provides a hint about the country, in order of hardest hint to easiest hint. There should be 4 values in the 'country-hints' field. "
+	    //+"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 9 values in the 'country-hints' field.\n "
+	    +"The JSON object should have a field called 'country-hints' which is an array or strings.  Each value in the array provides a hint about the country, in order of hardest hint to easiest hint. There should be 2 values in the 'country-hints' field. "
+	    +"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 3 values in the 'country-hints' field.\n "
     ],
     new MessagesPlaceholder("messages"),
 ]);
@@ -132,14 +134,10 @@ const workflowParamCity = new StateGraph(GraphAnnotationParamCity)
 const appParamCity = workflowParamCity.compile({ checkpointer: new MemorySaver() });
 
 // Function to get a hint with parameterized city and country
-const getLLMHint = async function(city,country, callback) {
+const getLLMHint = async function(city,country,callback) {
     const input = {
 	messages: [
 	    new HumanMessage("You are to provide a set of hints about the {city} in {country}."),
-	    /*{
-		role: "user",
-		content: "You are to provide a set of hints about the {city} in {country}. "
-	    },*/
 	],
 	city:    city    || "Hamilton",
 	country: country || "New Zealand"
@@ -151,8 +149,24 @@ const getLLMHint = async function(city,country, callback) {
     const output_json = await json_parser.parse(output_last_message);
 
     callback(output_json);
-    
-    //return output_json;
 };
+
+const getLLMHintSync = async function(city,country) {
+    const input = {
+	messages: [
+	    new HumanMessage("You are to provide a set of hints about the {city} in {country}."),
+	],
+	city:    city    || "Hamilton",
+	country: country || "New Zealand"
+    };
+
+    const output = await appParamCity.invoke(input, llm_config);
+
+    const output_last_message = output.messages[output.messages.length - 1]?.content;
+    const output_json = await json_parser.parse(output_last_message);
+    
+    return output_json;
+};
+
 
 module.exports = { getLLMResponseOneShot, getLLMHintLondon, getLLMHint };

@@ -7,6 +7,7 @@ const cors    = require("cors");
 const {Server} = require("socket.io");
 
 const utils         = require("./utils");
+const gisLocations  = require("./gis-locations");
 const llmAssistant  = require("./llm-assistant");
 const audioPlaylist = require("./audio-playlist");
 
@@ -62,30 +63,9 @@ const DefaultStartingLocation = {
 
 const HintDelayMsecs = 10* 1000;
 
-const CitiesArray = [
-    { city: "Auckland",      country: "New Zealand", coordinates: [ 174.763336,  -36.848461, 300.0]},
-    { city: "Rome",          country: "Italy",       coordinates: [  12.496366,   41.902782, 300.0]},
-    { city: "Paris",         country: "France",      coordinates: [   2.349014,   48.864716, 300.0]},
-    { city: "Tokyo",         country: "Japan",       coordinates: [ 139.817413,   35.672855, 300.0]},
-    //{ city: "Dubai",         country: "",            coordinates: [  55.296249,   25.276987, 300.0]},
-    { city: "Hamilton",      country: "New Zealand", coordinates: [ 175.269363,  -37.781528, 300.0]},
-    { city: "Toronto",       country: "Canada",      coordinates: [ -79.384293,   43.653908, 300.0]},
-    { city: "Sydney",        country: "Australia",   coordinates: [ 151.209900,  -33.865143, 300.0]},
-    { city: "San Francisco", country: "USA",         coordinates: [-122.431297,   37.773972, 300.0]},
-    { city: "New York",      country: "USA",         coordinates: [ -73.935242,   40.730610, 300.0]},
-    //{ city: "Seoul",         country: "South Korea", coordinates: [ 127.024612,   37.532600, 300.0]},
-    //{ city: "New Delhi",     country: "India",       coordinates: [  77.216721,   28.644800, 300.0]},
-    { city: "Barcelona",     country: "Spain",       coordinates: [   2.154007,   41.390205, 300.0]},
-    { city: "Athens",        country: "Greece",      coordinates: [  23.727539,   37.983810, 300.0]},
-    { city: "Budapest",      country: "Hungary",     coordinates: [  19.040236,   47.497913, 300.0]},
-    //{ city: "Moscow",        country: "Russia",      coordinates: [  37.618423,   55.751244, 300.0]},
-    //{ city: "Cairo",         country: "Egypt",       coordinates: [  31.233334,   30.033333, 300.0]},
-    { city: "Copenhagen",    country: "Denmark",     coordinates: [  12.568337,   55.676098, 300.0]},
-    { city: "London",        country: "England",     coordinates: [  -0.118092,   51.509865, 300.0]},
-] 
 
-
-const RandomizedCitiesArray = utils.createRandomizedArray(CitiesArray);
+//console.log("*** gisLocations: ", gisLocations.CitiesArray);
+const RandomizedCitiesArray = utils.createRandomizedArray(gisLocations.CitiesArray);
 
 // initialise necessary objects
 let allPlayers = {};
@@ -96,14 +76,50 @@ let hintsForEachRoom = {};
 let cityIndex = 0; 
 
 
+function resetGuessStates(roomId) {
+    // For the players in the given 'roomId' reset their guess state
+    
+    for (let player in allPlayers) {
+        if (allPlayers[player].room === roomId) {
+            allPlayers[player].isCorrect = false;
+            allPlayers[player].guesses.clear();
+        }
+    }
+}
+
+
+function startTimerBasedHints(roomId)
+{
+    let return_status = true;
+    
+    const hintsJSON = hintsForEachRoom[roomId];    
+
+    if (roomId in  hintsForEachRoom) {
+	const timer_id = setInterval(giveNextHint,HintDelayMsecs,roomId);
+	hintsJSON.timerId = timer_id;
+    }
+    else {
+	return_status = false;
+    }
+
+    return return_status;
+}
+
+function stopTimerBasedHints(roomId)
+{
+    const roomHints = hintsForEachRoom[roomId];
+    clearInterval(roomHints.timerId);
+}
+
 function giveNextHint(roomId)
 {
-    console.log("Giving next hint for roomId: " + roomId);
+    console.log(`Giving next hint for roomId '${roomId}'`);
     
     const roomHints = hintsForEachRoom[roomId];
     
     const countryIndex = roomHints.countryIndex;
     const cityIndex    = roomHints.cityIndex;
+    console.log(`  [countryHintIndex=${countryIndex},cityHintIndex=${cityIndex}]`);
     
     if (countryIndex < roomHints['country-hints'].length) {
 	const country_hint = roomHints['country-hints'][countryIndex];	
@@ -141,18 +157,40 @@ function giveNextHint(roomId)
 	const message_rec = utils.createMessage(roomId,message);
         io.in(roomId).emit("receive_message", message_rec);
 
-	// Stop the timer going off
-	clearInterval(roomHints.timerId);
+	stopTimerBasedHints(roomId);
     }
 }
 
-function startTimerBasedHints(roomId)
+function consumeNextCityForRoom(roomId)
 {
-    const timer_id = setInterval(giveNextHint,HintDelayMsecs,roomId);
+    // replace the current city with the next city (cityIndex should be forward at this point)
+    const nextCityData = RandomizedCitiesArray[cityIndex];	
+    cityForEachRoom[roomId] = nextCityData;
+    // increment cityIndex to be at the next globably available city
+    cityIndex++;
 
-    return timer_id;
+    return nextCityData;
 }
 
+function storeCityHints(hint_city,hint_country,roomId, hintsJSON)
+{
+    // Callback function from getting LLM Hints
+    
+    // hintsJSON is a JSON data-structure returned from the LLM
+    // It contains two fields: 'country-hints' and 'city-hints', each array of strings
+
+    // Top up 'hintsJSON' with further fields to help with giving out hints
+    hintsJSON.city = hint_city; // needed to general anagram/character jumbled version later on
+    hintsJSON['country-hints'].push(`The location you are flying over is in the country of ${hint_country}`);
+		
+    hintsJSON.countryIndex = 0;
+    hintsJSON.cityIndex = 0;
+		
+    hintsForEachRoom[roomId] = hintsJSON;
+    console.log(`hintsJSON added for [${roomId}]: `, hintsJSON);
+}	    
+
+    
 //listen a connection  event from client
 //socket is specific to a client  
 io.on("connection", (socket) => {
@@ -168,20 +206,20 @@ io.on("connection", (socket) => {
     })
     
     //listens from client side if they joined a room - gets data (in this case the room) from that particular client 
-    socket.on("join_room", (roomIdData) => {
-	console.log("**** socket.on('join_room'), roomIdData = ", roomIdData);
-        socket.join(roomIdData);
+    socket.on("join_room", (roomId) => {
+	console.log("**** socket.on('join_room'), roomId = ", roomId);
+        socket.join(roomId);
 
         // initialise the allPlayers object for each player
-	console.log(`Adding in player with socket.id = ${socket.id}, for roomIdData=${roomIdData}`)	   
+	console.log(`Adding in player with socket.id = ${socket.id}, for roomId=${roomId}`)	   
         allPlayers[socket.id] = {
-            room: roomIdData,
+            room: roomId,
             score: 0,
             isCorrect: false,
             guesses: new Set()
         }
 
-        if (!cityForEachRoom[roomIdData]) {
+        if (!cityForEachRoom[roomId]) {
 	    // First user joining this particular room
             if(cityIndex >= RandomizedCitiesArray.length){ 
 		// run out of new city details to issue from the global list
@@ -189,16 +227,19 @@ io.on("connection", (socket) => {
                 cityIndex = 0;
             }
 	    else {
-		// => store the city details under the roomIdData, and increment counter
-                cityForEachRoom[roomIdData] = RandomizedCitiesArray[cityIndex];
+		// => store the city details under the roomId, and increment counter
+                cityForEachRoom[roomId] = RandomizedCitiesArray[cityIndex];
                 cityIndex++;    
             }
 
-            const cityData_for_hints = cityForEachRoom[roomIdData];
+            const cityData_for_hints = cityForEachRoom[roomId];
 	    const hint_city = cityData_for_hints.city;
 	    const hint_country = cityData_for_hints.country;
 	    
 	    llmAssistant.getLLMHint(hint_city,hint_country, function(hintsJSON) {
+		storeCityHints(hint_city,hint_country,roomId, hintsJSON);
+	    });
+		/*
 		// This is the callback function
 		// When called, the argument given is the JSON data-structure returned from the LLM
 		// It contains two fields: 'country-hints' and 'city-hints', each array of strings
@@ -210,40 +251,82 @@ io.on("connection", (socket) => {
 		hintsJSON.countryIndex = 0;
 		hintsJSON.cityIndex = 0;
 		
-		hintsForEachRoom[roomIdData] = hintsJSON;
-		console.log(`hintsJSON for [${roomIdData}]: `, hintsJSON);
-		hintsJSON.timerId = startTimerBasedHints(roomIdData);
-	    });	    
+		hintsForEachRoom[roomId] = hintsJSON;
+		console.log(`hintsJSON added for [${roomId}]: `, hintsJSON);
+	    });	  */  
         }
 	
-        const cityData = cityForEachRoom[roomIdData];
+        const cityData = cityForEachRoom[roomId];
 	console.log(`Sending city data to newly joined user ${socket.id}: `, cityData);
-	socket.emit("city_data",cityData);
+	socket.emit("append_and_goto_city_data",cityData);
 	
         // initialise the cityFotEachRoom object so that each room gets a different city
-        console.log(`User with ID ${socket.id} joined room: ${roomIdData}`);
+        console.log(`User with ID ${socket.id} joined room: ${roomId}`);
         console.log(`User ${socket.id} score: ${allPlayers[socket.id].score}`);
     });
 
-    socket.on("start_animation_in_room", (roomIdData, speedData) => {
-	console.log(`**** socket.on('start_animation_in_room'), roomId=${roomIdData}, speed=${speedData}`);
-        //io.to(roomIdData).emit("start_animation", speedData);	
-        io.in(roomIdData).emit("start_animation", speedData);	
+    socket.on("start_animation_in_room", (roomId, speed) => {
+	console.log(`**** socket.on('start_animation_in_room'), roomId=${roomId}, speed=${speed}`);
+
+	if (startTimerBasedHints(roomId)) {
+	    // socket-client already animating, so only need to let others in the room know
+	    socket.to(roomId).emit("auto_start_animation", speed);
+	}
+	else {
+	    console.log("Hints data not yet available ... pausing animation");
+	    io.in(roomId).emit("pause_animation");
+	}
+	
+    });
+
+    socket.on("move_to_next_city", (roomId) => {
+	console.log(`**** socket.on('move_to_next_city'), roomId=${roomId}`);
+
+	// **** refactor candidate **** !!!!
+	
+	stopTimerBasedHints(roomId);
+
+	if (cityIndex >= RandomizedCitiesArray.length) {
+	    // Or is this a condition that should signal the end of the game?? // ****
+            // set index back to the first city
+            cityIndex = 0;
+        }
+
+	const nextCityData = consumeNextCityForRoom(roomId);
+        io.in(roomId).emit("append_and_goto_city_data", nextCityData);
+			
+        console.log(`New stored city data for roomId '${roomId}'`,cityForEachRoom[roomId]);
+
+	// Start up hints for the new city
+	const hint_city = nextCityData.city;
+	const hint_country = nextCityData.country;
+		    
+	llmAssistant.getLLMHint(hint_city,hint_country, function(hintsJSON) {
+	    storeCityHints(hint_city,hint_country,roomId, hintsJSON);
+	    startTimerBasedHints(roomId);			
+	});
+
+	resetGuessStates(roomId);
     });
     
     //listens from the client side the send_message event
     socket.on("send_message", (data) => {
-        let currentCity = cityForEachRoom[data.room].city;
+	console.log("socket.on('send_message') for roomId: " + data.room);
+	
+	const roomId = data.room;
+        let currentCity = cityForEachRoom[roomId].city;
         let player = allPlayers[socket.id];
 
         // check if the player's guess already exists in their set
-	console.log("**** player: ", player);
-	console.log("**** data: ", data);
+	console.log("**** Player info: ", player);
+	console.log("**** Socket data: ", data);
         if (player.guesses.has(data.message.toLowerCase())) {
-	    const correctMsg = utils.createMessage(data.room, `${data.author} has already guessed correctly.`);
-            io.in(data.room).emit("receive_message", correctMsg);
+	    const correctMsg = utils.createMessage(roomId, `You has already correctly guessed this location.`);
+            socket.emit("receive_message", correctMsg);
         }
         else if (data.message.toLowerCase() == currentCity.toLowerCase()) {
+	    // The sent mesage is a correct guess by (one of) the users
+
             // increment player score by 1
             player.score++;
             // add the user's correct guess to their set
@@ -251,64 +334,76 @@ io.on("connection", (socket) => {
             // set player's isCorrect to true
             player.isCorrect = true;
 
-            console.log(allPlayers);
-	    const correctMsg = utils.createMessage(data.room, `${data.author} guessed correctly!`);	    
-            io.in(data.room).emit("receive_message", correctMsg);
+            console.log("**** allPlayers:", allPlayers);
+	    const correctMsg = utils.createMessage(roomId, `${data.author} guessed correctly!`);	    
+            io.in(roomId).emit("receive_message", correctMsg);
 
-            let isCorrectCount = 0;
-            let playerKeys = Object.keys(allPlayers);
-
-            //for (let i = 0; i < playerKeys.length; i += 2) {  // ****
-            for (let i = 0; i < playerKeys.length; i++) {  // ****		
-                let playerKey = playerKeys[i];
-                let player = allPlayers[playerKey];
-                if (player.room === data.room && player.isCorrect) {
-                    isCorrectCount++;
-                }
-            }
-
+	    const isCorrectCount = getCorrectCount(roomId);
             // get the number of players for each room
-            let allRooms = getRoomCount();
-            // check if the room exists 
-            if(allRooms[data.room]){
-                // if everyone in the room has guessed correct
-                //if (isCorrectCount == Math.ceil(allRooms[data.room].count / 2)) { // ****
-		console.log("**** isCorrectCount = ", isCorrectCount);
-		const num_in_room = allRooms[data.room].count;
+            //let allRooms = getRoomCount();
+	    const numInRoom = getRoomCount(roomId);
 
-		console.log("**** allRooms[data.room] = ", allRooms[data.room]);
-		console.log("**** num_in_room = ", num_in_room);
+	    console.log("**** isCorrectCount = " + isCorrectCount);
+	    console.log("**** numInRoom = ", numInRoom);
+	    
+	    if (isCorrectCount == 1) {
+		// First person to guess
+		// => get a bonus point
+		player.score++;
 		
-                //if (isCorrectCount == Math.ceil(allRooms[data.room].count)) { // ****
-		if (isCorrectCount == num_in_room) { // ****
-                    // if the cityIndex is more than or equal to the length of the cities array
-                    if (cityIndex >= RandomizedCitiesArray.length) {
-			// Or is this a condition that should signal the end of the game?? // ****
-                        // set index back to the first city
-                        cityIndex = 0;
-                    }
-                    
-                    // replace the current city with the next city (cityIndex should be forward at this point)
-                    cityForEachRoom[data.room] = RandomizedCitiesArray[cityIndex];
-                    // increment cityIndex for the next new city
-                    cityIndex++;
-
-                    const cityData = cityForEachRoom[data.room];
-                    io.to(data.room).emit("city_data", cityData);
-
-                    console.log(cityForEachRoom[data.room]);
-
-                    // reset all player's stats 
+		// => start countdown clock
+		if (numInRoom > 1) {
+                    io.in(roomId).emit("start_timer");
+		}
+		socket.emit("correct_guess", true); // (true => and was first to guess correct)
+	    }
+	    else {
+		socket.emit("correct_guess", false); // (false => but not the first guess)
+	    }
+			    		
+	    if (isCorrectCount == numInRoom) { 
+                // if the cityIndex is more than or equal to the length of the cities array
+                if (cityIndex >= RandomizedCitiesArray.length) {
+		    // Or is this a condition that should signal the end of the game?? // ****
+                    // set index back to the first city
+                    cityIndex = 0;
+                }
+		
+		// Everyone one has guessed correctly
+		// => (i) stop hinting and (ii) go to next city
+		
+		// **** refactor candidate **** !!!!
+		
+		stopTimerBasedHints(roomId);
+		
+		const nextCityData = consumeNextCityForRoom(roomId);		    
+                io.in(roomId).emit("append_and_goto_city_data", nextCityData);
+		
+                console.log(cityForEachRoom[roomId]);
+		
+		// Start up hints for the new city
+		const hint_city = nextCityData.city;
+		const hint_country = nextCityData.country;
+		
+		llmAssistant.getLLMHint(hint_city,hint_country, function(hintsJSON) {
+		    storeCityHints(hint_city,hint_country,roomId, hintsJSON);
+		    startTimerBasedHints(roomId);			
+		});		    
+		
+		resetGuessStates(roomId);
+		/*
+                    // reset all player's guess state (for this new city)
                     for (let player in allPlayers) {
-                        if (allPlayers[player].room === data.room) {
+                        if (allPlayers[player].room === roomId) {
                             allPlayers[player].isCorrect = false;
                             allPlayers[player].guesses.clear();
                         }
-                    }
-                }
+			}*/
+		    
             }
-        } else {
-            socket.to(data.room).emit("receive_message", data);
+        }
+	else {
+            socket.to(roomId).emit("receive_message", data);
         }
 
         let playerScore = {
@@ -317,7 +412,7 @@ io.on("connection", (socket) => {
             score: player.score,
         };
 
-        io.in(data.room).emit("update_board", playerScore);
+        io.in(roomId).emit("update_board", playerScore);
     });
 
 
@@ -339,8 +434,9 @@ io.on("connection", (socket) => {
         delete allPlayers[socket.id];
     });
 
-    function getRoomCount() {
-	console.log("**** getRoomCount(), allPlayers: ", allPlayers);
+    // **** Move to earlier in file, or turn into module
+    function getAllRoomCounts() {
+	console.log("**** getAkkRoomCounts(), allPlayers: ", allPlayers);
         let roomCounts = {};
         for (let player in allPlayers){
             let room = allPlayers[player].room;
@@ -352,6 +448,35 @@ io.on("connection", (socket) => {
         }
 
         return roomCounts;
+    }
+
+    function getRoomCount(roomId) {
+	console.log("**** getRoomCount(), roomId " + roomId);
+        let roomCount = 0;
+	
+        for (let player in allPlayers){
+            let check_roomId = allPlayers[player].room;
+	    if (check_roomId == roomId) {
+		roomCount++;
+	    }
+        }
+
+        return roomCount;
+    }
+
+    function getCorrectCount(roomId) {
+        let isCorrectCount = 0;
+        let playerKeys = Object.keys(allPlayers);
+	
+        for (let i=0; i<playerKeys.length; i++) { 
+            let playerKey = playerKeys[i];
+            let player = allPlayers[playerKey];
+            if (player.room === roomId && player.isCorrect) {
+                isCorrectCount++;
+            }
+        }
+
+	return isCorrectCount;
     }
 });
 
@@ -398,7 +523,7 @@ app.get('/get-llm-hint-london', async (req,res) => {
 
 
 app.get('/get-llm-hint', async (req,res) => {
-    const message_response = await llmAssistant.getLLMHint(req.query.city,req.query.country);
+    const message_response = await llmAssistant.getLLMHintSync(req.query.city,req.query.country);
     const message_response_str = JSON.stringify(message_response);
 
     res.setHeader("Content-Type", "application/json");    
