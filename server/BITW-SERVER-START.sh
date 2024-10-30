@@ -7,6 +7,9 @@ fi
 client_dir="../client"
 build_dir="$client_dir/build"
 
+has_build_dir=0
+freshly_built=0
+
 # Check build_dir exists and up to date, otherwise issue a warning
 if [ ! -d $build_dir ] ; then
     echo "===="
@@ -16,7 +19,8 @@ if [ ! -d $build_dir ] ; then
     echo "needs to be running"
     echo "===="
 else
-
+    has_build_dir=1
+    
     # Are any files in $client_dir/{public,src} newer than the newest file found in $build_dir?
 
     # Find the newest file in $build_dir
@@ -32,7 +36,21 @@ else
 	echo "To operate BITW in production mode, either regeneate the client build directory"
 	echo "or else run the client's developer mode server"
 	echo "===="
+    else
+	freshly_built=1
     fi
 fi
 
-npm run start
+# If looking to have pm2 installed as local package to project
+# PORT=$BITW_PORT ./node_modules/pm2/bin/pm2 start --name "$BITW_PM2_NAME" "npm run start"
+
+if [ "x$1" = "xprod" ] ; then
+    if [ $freshly_built = "1" ] ; then
+	echo "Launching BITW Server in production mode using 'pm2'"
+	pm2 start --name "BITW Server" "npm run start"
+    else
+	echo "Error: BITW client code not built/up-to-date to run in production mode" >&2
+    fi
+else
+    npm run start
+fi
