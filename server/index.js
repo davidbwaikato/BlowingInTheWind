@@ -16,6 +16,8 @@ var serveindex = require('serve-index')
 const SERVER_PORT = process.env.BITW_SERVER_PORT || 3001;
 const CLIENT_URL  = process.env.BITW_CLIENT_URL || "http://localhost:3001";
 
+const TargetScore = 5;
+
 const app = express();
 
 app.use(cors());
@@ -61,7 +63,10 @@ const DefaultStartingLocation = {
     coordinates: [ 175.3175556, -37.7884167, 100.0]    // A lower altitude works better of the default starting location
 };
 
-const HintDelayMsecs = 10* 1000;
+// For fast hints
+//const HintDelayMsecs = 10* 1000;
+// Regular speed
+const HintDelayMsecs = 20* 1000;
 
 
 //console.log("*** gisLocations: ", gisLocations.CitiesArray);
@@ -119,6 +124,7 @@ function giveNextHint(roomId)
     console.log(`Giving next hint for roomId '${roomId}'`);
     if (!hintsForEachRoom.hasOwnProperty(roomId)) {
 	console.log("No users left in room.");
+	return;
     }
 	
     const roomHints = hintsForEachRoom[roomId];
@@ -332,8 +338,8 @@ io.on("connection", (socket) => {
         let player = allPlayers[socket.id];
 
         // check if the player's guess already exists in their set
-	console.log("**** Player info: ", player);
-	console.log("**** Socket data: ", data);
+	//console.log("**** Player info: ", player);
+	//console.log("**** Socket data: ", data);
         if (player.guesses.has(data.message.toLowerCase())) {
 	    const correctMsg = utils.createMessage(roomId, `You has already correctly guessed this location.`);
             socket.emit("receive_message", correctMsg);
@@ -374,7 +380,24 @@ io.on("connection", (socket) => {
 	    else {
 		socket.emit("correct_guess", false); // (false => but not the first guess)
 	    }
-			    		
+
+	    // Check to see if this means someone has won
+	    if (checkForWinner(roomId,TargetScore)) {
+		// send update score, and then send message declaring a winner
+
+		let playerScore = {
+		    id: socket.id,
+		    name: data.author,
+		    score: player.score,
+		};
+
+		io.in(roomId).emit("update_board", playerScore);
+
+		// Give the client time to update the scoreboard, before declaring the winner in an alert box
+		setTimeout(function() { io.in(roomId).emit("we_have_a_winner",data.author,TargetScore) }, 1000);
+		
+	    }
+	    
 	    if (isCorrectCount == numInRoom) { 
                 // if the cityIndex is more than or equal to the length of the cities array
                 if (cityIndex >= RandomizedCitiesArray.length) {
@@ -502,6 +525,26 @@ io.on("connection", (socket) => {
 
 	return isCorrectCount;
     }
+
+
+    function checkForWinner(roomId,scoreToReach) {
+	console.log("**** checkForWinner(), roomId " + roomId);
+
+	let foundWinner = false;
+		
+        for (let player in allPlayers){
+            let check_roomId = allPlayers[player].room;
+	    if (check_roomId == roomId) {
+		if (allPlayers[player].score >= scoreToReach) {
+		    foundWinner = true;
+		    break;
+		}
+	    }
+        }
+
+        return foundWinner;
+    }
+    
 });
 
     

@@ -13,11 +13,14 @@ Cesium.Ion.defaultAccessToken = config.CESIUM_API_KEY;
 let bitw_socket = null;
 let bitw_roomId = null;
 
+let bitw_animation_auto_paused  = false;
 let bitw_animation_auto_started = false;
 let bitw_speed_auto_changed     = false;
 
 let bitw_city_correct  = false;
 let bitw_guessed_first = false;
+
+let bitw_initial_pause = true;
 
 window.bitws_registerSocketOn = function(socket) {
 
@@ -37,20 +40,22 @@ window.bitws_registerSocketOn = function(socket) {
 	viewer.clock.multiplier = data_speed;
     });
 
-    /*
-    socket.on("set_cesium_multiplier", (data_speed) => {
-	console.log("socket.on('set_cesium_multiplier'): speed =", data_speed)
-
-	viewer.clock.multiplier = data_speed;
-    });
-    */
     
+    socket.on("we_have_a_winner", (playerName,targetScore) => {
+	console.log("socket.on('we_have_a_winner'): ")
+
+	alert(`We have a Winner!\nWell done ${playerName} for achieving the target score of ${targetScore}.`);
+	document.location = "start.html";
+    });
+
     socket.on("pause_animation", () => {
 	console.log("socket.on('pause_animation'): ")
 
-	viewer.clockViewModel.shouldAnimate = false;
+	bitw_animation_auto_paused  = true;
+	viewer.clockViewModel.shouldAnimate = false;	
     });
     
+
     socket.on("append_city_data", (data) => {
 	console.log("socket.on('append_city_data') data:", data)
 	
@@ -761,7 +766,8 @@ async function getWindBlownNextPoint(originPoint) {
 async function teleportToCurrentCity()
 {
   console.log("teleportToCurrentCity()");
-  bitw_animation_auto_started = false;    
+  bitw_animation_auto_paused  = false;
+  bitw_animation_auto_started = false;
   bitw_city_correct  = false;
   bitw_guessed_first = false;
     
@@ -782,7 +788,18 @@ async function teleportToCurrentCity()
       //console.log(current_city_info.cityName);
       //reset clock
       viewer.clock.multiplier = 1;
-      //viewer.clock.shouldAnimate = true;
+
+      if (bitw_initial_pause) {
+	  bitw_initial_pause = false;
+      }
+      else if (window.isPaused()) {
+	  // Teleporting into 2nd (or later city)
+	  
+	  // If the user has manually paused, then the following two lines has the effect
+	  // of auto-starting the user, without a broadcast start to all the other users
+	  bitw_animation_auto_started = true;	  
+	  viewer.clock.shouldAnimate = true;
+      }
   }
 
   if (viewer != null) {
@@ -1344,8 +1361,22 @@ if (viewer != null) {
 		
 		
 		viewer.zoomTo(BalloonSurrogateEntity, cameraOffset);
-		// consume the 'auto-started'
-		bitw_animation_auto_started = false;
+
+		// Setting this to true here means that when the user resumes animation,
+		// it doesn't tigger a broadcast auto-start to everyone else
+		bitw_animation_auto_started = true;
+		/*
+		if (bitw_initial_pause) {
+		    // What users to start in an initial paused state
+		    bitw_initial_pause = false;
+		    bitw_animation_auto_started = false;
+		}
+		else {
+		    // Setting this to true here means that when the user resumes animation,
+		    // it doesn't tigger a broadcast auto-start to everyone else
+		    bitw_animation_auto_started = true;
+		    }*/
+		
 
 	    }
 	});

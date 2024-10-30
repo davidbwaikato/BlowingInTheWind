@@ -323,7 +323,8 @@ body {
 }
 
 .leaderboard > .player-score-div:nth-child(odd) {
-  color: #ffffff;
+  /* color: #ffffff; */
+  color: #666666;
   /* background-color: #607d8b; */
   background-color: #ffe0a7;
 }

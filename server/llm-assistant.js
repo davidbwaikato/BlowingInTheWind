@@ -100,10 +100,11 @@ const prompt_param_city = ChatPromptTemplate.fromMessages([
 	//+"Use your computational functionality to double-check that the anagram provided is an exact match with the city name.\n "
 	    //+"For the very last hint given for the city, always express the hint as a word jumbled 'The letters of the city name jumbled up are ... ' "	
 	    +"Respond with a valid JSON object. "
-	    //+"The JSON object should have a field called 'country-hints' which is an array or strings.  Each value in the array provides a hint about the country, in order of hardest hint to easiest hint. There should be 4 values in the 'country-hints' field. "
-	    //+"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 9 values in the 'country-hints' field.\n "
+	    // original done as 4 values and 9 values
 	    +"The JSON object should have a field called 'country-hints' which is an array or strings.  Each value in the array provides a hint about the country, in order of hardest hint to easiest hint. There should be 2 values in the 'country-hints' field. "
-	    +"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 3 values in the 'country-hints' field.\n "
+	    +"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 4 values in the 'country-hints' field.\n "
+	    //+"The JSON object should have a field called 'country-hints' which is an array or strings.  Each value in the array provides a hint about the country, in order of hardest hint to easiest hint. There should be 2 values in the 'country-hints' field. "
+	    //+"The JSON object should also have a field called 'city-hints' which is an array or strings.  Each value in this array provides a hint about the city, in order of hardest hint to easiest hint. There should be 3 values in the 'country-hints' field.\n "
     ],
     new MessagesPlaceholder("messages"),
 ]);

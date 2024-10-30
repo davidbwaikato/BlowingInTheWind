@@ -162,7 +162,7 @@ function BitwChat({socket, username, room}) {
         socket.on("receive_message", (data) => {
             //displays previous list of messages and the new message
 	    const is_paused = window.isPaused();
-	    console.log("**** @@@@@@ is_paused: ", is_paused);
+	    //console.log("**** @@@@@@ is_paused: ", is_paused);
 	    
 	    if (window.isPaused()) {
 		// If a hint, only allow through if the last one (the anagram)
