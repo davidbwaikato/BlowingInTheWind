@@ -459,9 +459,9 @@ img.background-cover {
     position: absolute;
     top: 94%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -70%);
     text-align: center;
-    z-index: 1; /* To ensure the button appears above the image */
+    z-index: 2; /* To ensure the button appears on top of the image */
 }
 .button {
     display: inline-block;
@@ -484,4 +484,19 @@ img.background-cover {
 .button:hover {
     /*background-color: #b14d0e; */ /* Change button background color on hover */
     background-color: #de2423
+}
+
+.instruction-container {
+    position: absolute;
+    top: 104%;
+    left: 50%;
+    transform: translate(-50%, -10%);
+    padding: 0 1.5rem 1rem 1.5rem;
+    background-color: white;
+    XXfont-family: Titan, Modak, Sniglet;
+    font-family: 'Roboto', sans-serif;
+    XXfont-weight: 200;
+    font-size: 120%;
+    text-align: left;
+    z-index: 1; /* To ensure the button appears on-top of the image */
 }
