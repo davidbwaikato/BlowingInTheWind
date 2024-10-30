@@ -108,13 +108,19 @@ function startTimerBasedHints(roomId)
 function stopTimerBasedHints(roomId)
 {
     const roomHints = hintsForEachRoom[roomId];
-    clearInterval(roomHints.timerId);
+    if (roomHints.timerId != null) {
+	clearInterval(roomHints.timerId);
+	roomHints.timerId = null;
+    }
 }
 
 function giveNextHint(roomId)
 {
     console.log(`Giving next hint for roomId '${roomId}'`);
-    
+    if (!hintsForEachRoom.hasOwnProperty(roomId)) {
+	console.log("No users left in room.");
+    }
+	
     const roomHints = hintsForEachRoom[roomId];
     
     const countryIndex = roomHints.countryIndex;
@@ -279,6 +285,14 @@ io.on("connection", (socket) => {
 	
     });
 
+
+    socket.on("start_speedchange_in_room", (roomId, speed) => {
+	console.log(`**** socket.on('start_speedchange_in_room'), roomId=${roomId}, speed=${speed}`);
+
+	socket.to(roomId).emit("auto_change_speed", speed);		
+    });
+
+    
     socket.on("move_to_next_city", (roomId) => {
 	console.log(`**** socket.on('move_to_next_city'), roomId=${roomId}`);
 
@@ -391,15 +405,6 @@ io.on("connection", (socket) => {
 		});		    
 		
 		resetGuessStates(roomId);
-		/*
-                    // reset all player's guess state (for this new city)
-                    for (let player in allPlayers) {
-                        if (allPlayers[player].room === roomId) {
-                            allPlayers[player].isCorrect = false;
-                            allPlayers[player].guesses.clear();
-                        }
-			}*/
-		    
             }
         }
 	else {
@@ -431,7 +436,26 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", (unusedData) =>{
         console.log("user disconnect", socket.id);
-        delete allPlayers[socket.id];
+
+	const player = allPlayers[socket.id];
+
+	if (player) {
+	    // 'player' might not exist if the server has been restarte
+	    const roomId = player.room;
+	    
+	    const num_in_room = getRoomCount(roomId);
+	    
+            delete allPlayers[socket.id];
+	    
+	    if (num_in_room == 1) {
+		// i.e., this is the last player in the room
+		// => delete the all the data associated with this room
+		console.log(`Last player in roomId '${roomId}' => deleting allocated city data for room`);
+		stopTimerBasedHints(roomId);		
+		delete cityForEachRoom[roomId];
+		delete hintsForEachRoom[roomId];
+	    }
+	}
     });
 
     // **** Move to earlier in file, or turn into module

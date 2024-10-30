@@ -4,6 +4,7 @@ import './App.css';
 
 import BitwChat from './BitwChat';
 import bitw_socket from './SocketInstance';
+//import { bitw_io, bitw_socket } from './SocketInstance';
 
 function App() {
   //initialises user and room state 
@@ -23,6 +24,7 @@ function App() {
     
   useEffect(() => {
       window.onload = function() {
+	  console.log("**** App.js window.onload() calling bitws_registerSocketOn() and bitws_initStartngLocation()");
 	  window.bitws_registerSocketOn(bitw_socket);
 	  window.bitws_initStartingLocation(bitw_socket);
       }      

@@ -13,7 +13,7 @@ function BitwChat({socket, username, room}) {
 
     const [playAudioBackground, setPlayAudioBackground] = useState(true);
     const [playAudioMusic,      setPlayAudioMusic] = useState(true);
-
+    
     const sendMessage = async () =>{
         if(currentMessage !== "" ){
 	    const date_now = new Date();
@@ -78,7 +78,7 @@ function BitwChat({socket, username, room}) {
     }
     
 		    
-    const startPlaylist = useCallback((json_data,audio_elem,max_vol) => {
+    const startPlaylist = useCallback((json_data,audio_elem,max_vol,title_id) => {
 
 	const audio_crossfade_in_thresh_perc  = 0.05;
 	const audio_crossfade_out_thresh_perc = 1.0 - audio_crossfade_in_thresh_perc;
@@ -136,6 +136,11 @@ function BitwChat({socket, username, room}) {
 		playlist_pos = (playlist_pos + 1) % playlist.length;
 		const mp3_url = playlist[playlist_pos].url;
 		console.log("Selecting next track: ", playlist[playlist_pos].track_info)
+		if ((title_id) && (title_id != null)) {
+		    const alt_tag_elem = document.getElementById(title_id);
+		    alt_tag_elem.title = playlist[playlist_pos].track_info.track;
+		}
+		
 		audio_elem.src = mp3_url;
 		// Add track as tooltip on play/mute button
 	    });
@@ -143,6 +148,10 @@ function BitwChat({socket, username, room}) {
 	    // Start the first track playing
 	    const mp3_url = playlist[0].url;
 	    console.log("Selected track: ", playlist[0].track_info)
+	    if ((title_id) && (title_id != null)) {
+		const alt_tag_elem = document.getElementById(title_id);
+		alt_tag_elem.title = playlist[0].track_info.track;
+	    }
 	    audio_elem.src = mp3_url;
 	    // Add track tooltip on play/mute button
 	}
@@ -151,8 +160,25 @@ function BitwChat({socket, username, room}) {
     //calls functions whenever there is a change either by you or other people on the socket 
     useEffect(() => {
         socket.on("receive_message", (data) => {
-        //displays previous list of messages and the new message           
-          setMessageList((list) => [...list, data]);
+            //displays previous list of messages and the new message
+	    const is_paused = window.isPaused();
+	    console.log("**** @@@@@@ is_paused: ", is_paused);
+	    
+	    if (window.isPaused()) {
+		// If a hint, only allow through if the last one (the anagram)
+		if (data.message.startsWith("Country Hint #") || data.message.startsWith("City Hint #")) {
+		    if (data.message.startsWith("City hint #1")) {
+			// Let the last one through
+			setMessageList((list) => [...list, data]);			
+		    }
+		}
+		else {
+		    setMessageList((list) => [...list, data]);
+		}
+	    }
+	    else {
+		setMessageList((list) => [...list, data]);
+	    }
         });
         
         socket.on("update_board", (data) => {
@@ -172,7 +198,7 @@ function BitwChat({socket, username, room}) {
         return () => {
           socket.off("receive_message");
           socket.off("update_board");
-          socket.off("show_player_scores");
+          socket.off("show_player_scores"); // **** can this used??
 	};
     }, [socket]);
 
@@ -190,7 +216,7 @@ function BitwChat({socket, username, room}) {
 	    })
 	    .then((json_data) => {
 		if (json_data['status'] === "ok") {
-		    startPlaylist(json_data,audio_background,1.0);
+		    startPlaylist(json_data,audio_background,1.0,null);
 		}
 	    });
 	
@@ -208,7 +234,7 @@ function BitwChat({socket, username, room}) {
 	    })
 	    .then((json_data) => {
 		if (json_data['status'] === "ok") {
-		    startPlaylist(json_data,audio_music,0.3);
+		    startPlaylist(json_data,audio_music,0.3,"play-audio-music");
 		}
 	    });
 
